@@ -10,9 +10,11 @@ fi
 if [ "$WHISPER_DEVICE" = "cuda" ]; then
   SP=$(./venv/bin/python -c "import site;print(site.getsitepackages()[0])")
   export LD_LIBRARY_PATH="$SP/nvidia/cublas/lib:$SP/nvidia/cudnn/lib:$LD_LIBRARY_PATH"
-  # voxtype (daemon Vulkan) compite por la VRAM con large-v3; lo paramos para dar aire.
-  # Reactivar luego con: systemctl --user start voxtype.service
+  # voxtype (daemon Vulkan) compite por la VRAM con large-v3; lo paramos para dar aire
+  # y lo reactivamos solos al cerrar la app (fin del servidor, Ctrl+C o kill).
   systemctl --user stop voxtype.service 2>/dev/null || true
+  trap 'systemctl --user start voxtype.service 2>/dev/null || true' EXIT
 fi
 brave "file://$PWD/index.html" >/dev/null 2>&1 &
-exec ./venv/bin/python servidor.py
+# Sin 'exec': así el trap de arriba corre al terminar el servidor.
+./venv/bin/python servidor.py
