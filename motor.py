@@ -92,6 +92,8 @@ def load_model():
 
 def transcribe(pcm: bytes, model) -> tuple[str, str]:
     audio = pcm_to_float32(pcm)
-    segments, info = model.transcribe(audio, beam_size=1, vad_filter=False)
-    texto = " ".join(s.text for s in segments).strip()
+    # vad_filter descarta tramos sin voz y no_speech_prob filtra alucinaciones
+    # de Whisper sobre silencio/ruido (texto fantasma).
+    segments, info = model.transcribe(audio, beam_size=1, vad_filter=True)
+    texto = " ".join(s.text for s in segments if s.no_speech_prob < 0.6).strip()
     return texto, info.language
