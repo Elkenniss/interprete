@@ -1,0 +1,101 @@
+import json
+import os
+import re
+import time
+import urllib.request
+from pathlib import Path
+
+import numpy as np
+
+_ESTILO = None
+_MODEL = None
+
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+
+def load_estilo() -> str:
+    global _ESTILO
+    if _ESTILO is None:
+        _ESTILO = Path(__file__).with_name("estilo_glosario.md").read_text(encoding="utf-8")
+    return _ESTILO
+
+def build_prompt(original: str, direction: str) -> str:
+    destino = "inglés (English)" if direction == "es2en" else "español"
+    return (
+        f"{load_estilo()}\n\n"
+        f"Traduce el siguiente texto al {destino}, aplicando TODAS las reglas de arriba.\n"
+        f"Texto:\n\"\"\"\n{original}\n\"\"\"\n\n"
+        "Responde SOLO con JSON válido, sin texto extra, con esta forma exacta:\n"
+        '{"traduccion": "<la traducción>", '
+        '"resaltados": [{"texto": "<fragmento del texto>", "tipo": "numero|direccion|nombre|fecha"}]}\n'
+        "Incluye en resaltados los números/cantidades, direcciones, nombres propios y fechas/horas "
+        "que aparezcan (en el idioma de la traducción). Si no hay, deja la lista vacía."
+    )
+
+def parse_response(raw: str) -> dict:
+    s = re.sub(r"^```json\s*|\s*```$", "", raw.strip())
+    try:
+        d = json.loads(s)
+    except json.JSONDecodeError:
+        m = re.search(r"\{.*\}", s, re.DOTALL)
+        if not m:
+            return {"traduccion": "", "resaltados": []}
+        try:
+            d = json.loads(m.group(0))
+        except json.JSONDecodeError:
+            return {"traduccion": "", "resaltados": []}
+    return {"traduccion": str(d.get("traduccion", "")), "resaltados": d.get("resaltados", []) or []}
+
+def gemini_translate(original: str, direction: str) -> dict:
+    try:
+        key = os.environ["GEMINI_API_KEY"]
+        url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+               f"{GEMINI_MODEL}:generateContent?key={key}")
+        body = json.dumps({
+            "contents": [{"parts": [{"text": build_prompt(original, direction)}]}],
+            "generationConfig": {"temperature": 0.2, "response_mime_type": "application/json"},
+        }).encode("utf-8")
+        req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            data = json.loads(r.read())
+        text = data["candidates"][0]["content"]["parts"][0]["text"]
+        return parse_response(text)
+    except Exception:
+        return {"traduccion": "", "resaltados": []}
+
+def lang_to_direction(lang: str) -> str:
+    # El LEP habla español; Whisper rara vez confunde el inglés, pero confunde el
+    # español con otras lenguas romances. Por eso solo "en" es inglés; el resto, español.
+    return "en2es" if lang == "en" else "es2en"
+
+def build_intervencion(lang, original, traduccion, resaltados, hora) -> dict:
+    return {"hora": hora, "idioma": "en" if lang == "en" else "es",
+            "original": original, "traduccion": traduccion, "resaltados": resaltados}
+
+def process_text(lang: str, original: str, translate_fn=gemini_translate):
+    original = original.strip()
+    if not original:
+        return None
+    res = translate_fn(original, lang_to_direction(lang))
+    return build_intervencion(lang, original, res["traduccion"], res["resaltados"],
+                              time.strftime("%H:%M:%S"))
+
+def pcm_to_float32(pcm: bytes) -> "np.ndarray":
+    return np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
+
+def load_model():
+    global _MODEL
+    if _MODEL is None:
+        from faster_whisper import WhisperModel
+        size = os.environ.get("WHISPER_MODEL", "small")
+        device = os.environ.get("WHISPER_DEVICE", "cpu")
+        compute = "int8" if device == "cpu" else "int8_float16"
+        _MODEL = WhisperModel(size, device=device, compute_type=compute, cpu_threads=8)
+    return _MODEL
+
+def transcribe(pcm: bytes, model) -> tuple[str, str]:
+    audio = pcm_to_float32(pcm)
+    # vad_filter descarta tramos sin voz y no_speech_prob filtra alucinaciones
+    # de Whisper sobre silencio/ruido (texto fantasma).
+    segments, info = model.transcribe(audio, beam_size=1, vad_filter=True)
+    texto = " ".join(s.text for s in segments if s.no_speech_prob < 0.6).strip()
+    return texto, info.language
