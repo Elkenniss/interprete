@@ -5,7 +5,10 @@ import time
 import urllib.request
 from pathlib import Path
 
+import numpy as np
+
 _ESTILO = None
+_MODEL = None
 
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
@@ -73,3 +76,19 @@ def process_text(lang: str, original: str, translate_fn=gemini_translate):
     res = translate_fn(original, lang_to_direction(lang))
     return build_intervencion(lang, original, res["traduccion"], res["resaltados"],
                               time.strftime("%H:%M:%S"))
+
+def pcm_to_float32(pcm: bytes):
+    return np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
+
+def load_model():
+    global _MODEL
+    if _MODEL is None:
+        from faster_whisper import WhisperModel
+        _MODEL = WhisperModel("medium", device="cuda", compute_type="int8_float16")
+    return _MODEL
+
+def transcribe(pcm: bytes, model) -> tuple[str, str]:
+    audio = pcm_to_float32(pcm)
+    segments, info = model.transcribe(audio, beam_size=1, vad_filter=False)
+    texto = " ".join(s.text for s in segments).strip()
+    return texto, info.language
