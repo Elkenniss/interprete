@@ -7,7 +7,7 @@ from pathlib import Path
 
 _ESTILO = None
 
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
 def load_estilo() -> str:
     global _ESTILO

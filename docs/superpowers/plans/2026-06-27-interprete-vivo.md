@@ -20,7 +20,7 @@
 - Salida de Gemini, JSON exacto: `{"traduccion": "...", "resaltados": [{"texto":"...","tipo":"numero|direccion|nombre|fecha"}]}`.
 - Intervención (mensaje WebSocket), forma exacta: `{"hora":"HH:MM:SS","idioma":"es|en","original":"...","traduccion":"...","resaltados":[...]}`. `idioma":"es"` → panel izquierdo; `"en"` → panel derecho.
 - WebSocket en `ws://localhost:8765`. La página se abre con `file://` en Brave (no hace falta servidor HTTP).
-- API key de Gemini en variable de entorno `GEMINI_API_KEY`. Modelo en `GEMINI_MODEL` (default `gemini-2.0-flash`).
+- API key de Gemini en variable de entorno `GEMINI_API_KEY`. Modelo en `GEMINI_MODEL` (default `gemini-2.5-flash` — verificado con cuota gratuita; `gemini-2.0-flash` ya no tiene free tier, da 429).
 - Tests con `pytest`. Commits frecuentes.
 
 ---
