@@ -84,7 +84,10 @@ def load_model():
     global _MODEL
     if _MODEL is None:
         from faster_whisper import WhisperModel
-        _MODEL = WhisperModel("medium", device="cuda", compute_type="int8_float16")
+        size = os.environ.get("WHISPER_MODEL", "small")
+        device = os.environ.get("WHISPER_DEVICE", "cpu")
+        compute = "int8" if device == "cpu" else "int8_float16"
+        _MODEL = WhisperModel(size, device=device, compute_type=compute, cpu_threads=8)
     return _MODEL
 
 def transcribe(pcm: bytes, model) -> tuple[str, str]:
