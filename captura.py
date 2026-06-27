@@ -21,10 +21,11 @@ def _rms(frame: bytes) -> float:
     return float(np.sqrt(np.mean(x * x))) if len(x) else 0.0
 
 class Segmenter:
-    def __init__(self, rms_threshold=500, hang_ms=700, min_ms=300):
+    def __init__(self, rms_threshold=500, hang_ms=700, min_ms=300, max_ms=15000):
         self.threshold = rms_threshold
         self.hang_frames = max(1, hang_ms // FRAME_MS)
         self.min_frames = max(1, min_ms // FRAME_MS)
+        self.max_frames = max(1, max_ms // FRAME_MS)
         self.buf = []
         self.silence = 0
         self.in_speech = False
@@ -35,6 +36,12 @@ class Segmenter:
             self.in_speech = True
             self.silence = 0
             self.buf.append(frame)
+            if len(self.buf) >= self.max_frames:
+                out = b"".join(self.buf)
+                self.buf = []
+                self.silence = 0
+                self.in_speech = False
+                return out
             return None
         if not self.in_speech:
             return None
@@ -60,7 +67,7 @@ def utterances(monitor=None):
             if len(frame) < FRAME_BYTES:
                 break
             out = seg.feed(frame)
-            if out:
+            if out is not None:
                 yield out
     finally:
         proc.terminate()

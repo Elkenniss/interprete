@@ -33,3 +33,11 @@ def test_segmenter_descarta_intervencion_corta():
     for _ in range(3):
         r = seg.feed(_frame(0))
     assert r is None                  # demasiado corta, no emite
+
+def test_segmenter_corta_por_longitud_maxima():
+    seg = captura.Segmenter(rms_threshold=500, hang_ms=700, min_ms=30, max_ms=90)  # max 3 frames
+    assert seg.feed(_frame(3000)) is None
+    assert seg.feed(_frame(3000)) is None
+    out = seg.feed(_frame(3000))
+    assert out is not None
+    assert len(out) == 3 * captura.FRAME_BYTES

@@ -36,7 +36,7 @@ def parse_response(raw: str) -> dict:
     try:
         d = json.loads(s)
     except json.JSONDecodeError:
-        m = re.search(r"\{.*?\}", s, re.DOTALL)
+        m = re.search(r"\{.*\}", s, re.DOTALL)
         if not m:
             return {"traduccion": "", "resaltados": []}
         try:
@@ -46,15 +46,15 @@ def parse_response(raw: str) -> dict:
     return {"traduccion": str(d.get("traduccion", "")), "resaltados": d.get("resaltados", []) or []}
 
 def gemini_translate(original: str, direction: str) -> dict:
-    key = os.environ["GEMINI_API_KEY"]
-    url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
-           f"{GEMINI_MODEL}:generateContent?key={key}")
-    body = json.dumps({
-        "contents": [{"parts": [{"text": build_prompt(original, direction)}]}],
-        "generationConfig": {"temperature": 0.2, "response_mime_type": "application/json"},
-    }).encode("utf-8")
-    req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
     try:
+        key = os.environ["GEMINI_API_KEY"]
+        url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+               f"{GEMINI_MODEL}:generateContent?key={key}")
+        body = json.dumps({
+            "contents": [{"parts": [{"text": build_prompt(original, direction)}]}],
+            "generationConfig": {"temperature": 0.2, "response_mime_type": "application/json"},
+        }).encode("utf-8")
+        req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=15) as r:
             data = json.loads(r.read())
         text = data["candidates"][0]["content"]["parts"][0]["text"]
@@ -63,10 +63,12 @@ def gemini_translate(original: str, direction: str) -> dict:
         return {"traduccion": "", "resaltados": []}
 
 def lang_to_direction(lang: str) -> str:
-    return "es2en" if lang == "es" else "en2es"
+    # El LEP habla español; Whisper rara vez confunde el inglés, pero confunde el
+    # español con otras lenguas romances. Por eso solo "en" es inglés; el resto, español.
+    return "en2es" if lang == "en" else "es2en"
 
 def build_intervencion(lang, original, traduccion, resaltados, hora) -> dict:
-    return {"hora": hora, "idioma": "es" if lang == "es" else "en",
+    return {"hora": hora, "idioma": "en" if lang == "en" else "es",
             "original": original, "traduccion": traduccion, "resaltados": resaltados}
 
 def process_text(lang: str, original: str, translate_fn=gemini_translate):
@@ -77,7 +79,7 @@ def process_text(lang: str, original: str, translate_fn=gemini_translate):
     return build_intervencion(lang, original, res["traduccion"], res["resaltados"],
                               time.strftime("%H:%M:%S"))
 
-def pcm_to_float32(pcm: bytes):
+def pcm_to_float32(pcm: bytes) -> "np.ndarray":
     return np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
 
 def load_model():
