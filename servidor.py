@@ -19,14 +19,28 @@ async def handler(ws):
     finally:
         CLIENTS.discard(ws)
 
+def send(loop, msg):
+    asyncio.run_coroutine_threadsafe(broadcast(msg), loop)
+
 def pipeline(loop):
-    """Hilo bloqueante: captura → whisper → gemini → broadcast."""
+    """Hilo bloqueante: captura → whisper → traducción → broadcast.
+
+    Cada frase va en su propio try: un fallo puntual no mata el hilo ni la llamada.
+    """
     model = motor.load_model()
+    send(loop, {"tipo": "uso", **motor.deepl_usage()})
+    n = 0
     for pcm in captura.utterances():
-        texto, lang = motor.transcribe(pcm, model)
-        iv = motor.process_text(lang, texto)
-        if iv:
-            asyncio.run_coroutine_threadsafe(broadcast(iv), loop)
+        try:
+            texto, lang = motor.transcribe(pcm, model)
+            iv = motor.process_text(lang, texto)
+            if iv:
+                send(loop, iv)
+                n += 1
+                if n % 20 == 0:  # refresca el medidor de cuota cada ~20 frases
+                    send(loop, {"tipo": "uso", **motor.deepl_usage()})
+        except Exception as e:
+            print("[pipeline] error en una frase, sigo:", e, flush=True)
 
 async def main():
     loop = asyncio.get_running_loop()

@@ -21,7 +21,7 @@ def _rms(frame: bytes) -> float:
     return float(np.sqrt(np.mean(x * x))) if len(x) else 0.0
 
 class Segmenter:
-    def __init__(self, rms_threshold=500, hang_ms=700, min_ms=300, max_ms=15000):
+    def __init__(self, rms_threshold=500, hang_ms=700, min_ms=300, max_ms=7000):
         self.threshold = rms_threshold
         self.hang_frames = max(1, hang_ms // FRAME_MS)
         self.min_frames = max(1, min_ms // FRAME_MS)
@@ -57,17 +57,25 @@ class Segmenter:
         return None
 
 def utterances(monitor=None):
-    """Generador: lanza pw-record y produce PCM por intervención."""
+    """Generador: lanza parec y produce PCM por intervención.
+
+    Si parec muere a mitad de llamada (cambio de dispositivo, hipo del sistema),
+    se relanza solo en vez de cortar la captura — una llamada dura horas.
+    """
+    import time
     monitor = monitor or monitor_source()
-    proc = subprocess.Popen(record_command(monitor), stdout=subprocess.PIPE)
     seg = Segmenter()
-    try:
-        while True:
-            frame = proc.stdout.read(FRAME_BYTES)
-            if len(frame) < FRAME_BYTES:
-                break
-            out = seg.feed(frame)
-            if out is not None:
-                yield out
-    finally:
-        proc.terminate()
+    while True:
+        proc = subprocess.Popen(record_command(monitor), stdout=subprocess.PIPE)
+        try:
+            while True:
+                frame = proc.stdout.read(FRAME_BYTES)
+                if len(frame) < FRAME_BYTES:
+                    break  # parec murió: salimos a relanzarlo
+                out = seg.feed(frame)
+                if out is not None:
+                    yield out
+        finally:
+            proc.terminate()
+        print("[captura] parec se detuvo; relanzando en 1s…", flush=True)
+        time.sleep(1)

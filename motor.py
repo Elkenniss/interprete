@@ -3,6 +3,7 @@ import os
 import re
 import time
 import urllib.request
+import urllib.parse
 from pathlib import Path
 
 import numpy as np
@@ -62,6 +63,65 @@ def gemini_translate(original: str, direction: str) -> dict:
     except Exception:
         return {"traduccion": "", "resaltados": []}
 
+def deepl_translate(original: str, direction: str) -> dict:
+    # DeepL traduce plano (sin resaltados), pero aguanta el volumen de una llamada
+    # real sin el rate limit del free tier de Gemini. formality=prefer_more da "usted".
+    try:
+        if direction == "es2en":
+            data = {"text": original, "target_lang": "EN-US", "source_lang": "ES"}
+        else:
+            data = {"text": original, "target_lang": "ES", "source_lang": "EN",
+                    "formality": "prefer_more"}
+        body = urllib.parse.urlencode(data).encode("utf-8")
+        req = urllib.request.Request("https://api-free.deepl.com/v2/translate", data=body,
+            headers={"Authorization": "DeepL-Auth-Key " + os.environ.get("DEEPL_API_KEY", "")})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            d = json.loads(r.read())
+        return {"traduccion": d["translations"][0]["text"], "resaltados": []}
+    except Exception:
+        return {"traduccion": "", "resaltados": []}
+
+# Números/horas/fechas numéricas en el texto: Whisper ya convierte los dígitos
+# dictados a cifras (ej. "uno dos tres" → "123"), así que un patrón de dígitos basta
+# para resaltar SSN, teléfonos, cantidades, modelos y horas. Gratis, sin tokens.
+_NUM_RE = re.compile(r"\d[\d.,:/ -]*\d|\d")
+
+def resaltados_locales(texto: str) -> list:
+    vistos, out = set(), []
+    for m in _NUM_RE.finditer(texto):
+        t = m.group().strip(" .,:-/")
+        if len(t) >= 1 and t not in vistos:
+            vistos.add(t)
+            out.append({"texto": t, "tipo": "numero"})
+    return out
+
+def translate(original: str, direction: str) -> dict:
+    # Primario por env (TRADUCTOR), con fallback automático al otro: si el primario
+    # falla o agota cuota devuelve traducción vacía, y saltamos al secundario para
+    # no quedarnos mudos a mitad de llamada.
+    funcs = {"deepl": deepl_translate, "gemini": gemini_translate}
+    primario = os.environ.get("TRADUCTOR", "deepl")
+    orden = [primario] + [t for t in funcs if t != primario]
+    for t in orden:
+        res = funcs[t](original, direction)
+        if res["traduccion"].strip():
+            # DeepL no marca resaltados; los generamos localmente. Gemini ya trae los suyos.
+            if not res["resaltados"]:
+                res["resaltados"] = resaltados_locales(res["traduccion"])
+            return res
+    return {"traduccion": "", "resaltados": []}
+
+def deepl_usage() -> dict:
+    # Caracteres consumidos/límite del mes en DeepL, para saber en vivo si damos abasto.
+    try:
+        req = urllib.request.Request("https://api-free.deepl.com/v2/usage",
+            headers={"Authorization": "DeepL-Auth-Key " + os.environ.get("DEEPL_API_KEY", "")})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.loads(r.read())
+        return {"count": d.get("character_count", 0), "limit": d.get("character_limit", 0)}
+    except Exception:
+        return {"count": 0, "limit": 0}
+
 def lang_to_direction(lang: str) -> str:
     # El LEP habla español; Whisper rara vez confunde el inglés, pero confunde el
     # español con otras lenguas romances. Por eso solo "en" es inglés; el resto, español.
@@ -71,7 +131,7 @@ def build_intervencion(lang, original, traduccion, resaltados, hora) -> dict:
     return {"hora": hora, "idioma": "en" if lang == "en" else "es",
             "original": original, "traduccion": traduccion, "resaltados": resaltados}
 
-def process_text(lang: str, original: str, translate_fn=gemini_translate):
+def process_text(lang: str, original: str, translate_fn=translate):
     original = original.strip()
     if not original:
         return None
@@ -94,8 +154,18 @@ def load_model():
 
 def transcribe(pcm: bytes, model) -> tuple[str, str]:
     audio = pcm_to_float32(pcm)
+    # El audio de la llamada suele llegar flojo (monitor a volumen de escucha);
+    # normalizar al ~0.95 de escala evita que Whisper alucine en tramos bajos.
+    peak = float(np.max(np.abs(audio))) if len(audio) else 0.0
+    if peak > 0:
+        audio = audio / peak * 0.95
     # vad_filter descarta tramos sin voz y no_speech_prob filtra alucinaciones
     # de Whisper sobre silencio/ruido (texto fantasma).
     segments, info = model.transcribe(audio, beam_size=1, vad_filter=True)
+    # La llamada es solo inglés/español. Un idioma improbable (ru, ar, zh…) es
+    # alucinación de Whisper sobre ruido; lo descartamos. Las lenguas romances
+    # (pt, gl, ca, it) suelen ser español mal detectado y sí se conservan.
+    if info.language not in ("en", "es", "pt", "gl", "ca", "it"):
+        return "", info.language
     texto = " ".join(s.text for s in segments if s.no_speech_prob < 0.6).strip()
     return texto, info.language

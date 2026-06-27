@@ -22,13 +22,20 @@
 </style>
 </head>
 <body>
-<header>Intérprete en vivo <span id="estado">conectando…</span></header>
+<header>Intérprete en vivo <span id="cuota" title="Caracteres DeepL usados este mes"></span> <span id="estado">conectando…</span></header>
 <div class="grid">
   <section class="panel es"><h2>🇪🇸 Cliente (español) — original · interpretación</h2><div class="feed" id="feed-es"></div></section>
   <section class="panel en"><h2>🇺🇸 Representante (inglés) — original · interpretación</h2><div class="feed" id="feed-en"></div></section>
 </div>
 <script>
 const estado = document.getElementById("estado");
+const cuota = document.getElementById("cuota");
+function verUso(u){
+  if(!u.limit){ cuota.textContent = ""; return; }
+  const pct = Math.round(u.count / u.limit * 100);
+  cuota.textContent = `DeepL ${u.count.toLocaleString()}/${u.limit.toLocaleString()} (${pct}%)`;
+  cuota.style.color = pct >= 90 ? "#f66" : pct >= 70 ? "#fc6" : "#6c6";
+}
 function chips(res){
   return (res||[]).map(r => `<span class="chip ${r.tipo}">${r.texto}</span>`).join("");
 }
@@ -45,7 +52,7 @@ function connect(){
   const ws = new WebSocket("ws://localhost:8765");
   ws.onopen = () => estado.textContent = "● en vivo";
   ws.onclose = () => { estado.textContent = "desconectado, reintentando…"; setTimeout(connect, 1500); };
-  ws.onmessage = e => add(JSON.parse(e.data));
+  ws.onmessage = e => { const m = JSON.parse(e.data); m.tipo === "uso" ? verUso(m) : add(m); };
 }
 connect();
 </script>

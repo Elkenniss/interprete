@@ -6,5 +6,10 @@ if [ -z "$GEMINI_API_KEY" ]; then
   echo "Falta GEMINI_API_KEY. Crea ~/interprete/.env con GEMINI_API_KEY=... o expórtala." >&2
   exit 1
 fi
+# faster-whisper en GPU necesita las libs CUDA del venv (cuBLAS/cuDNN) en el loader.
+if [ "$WHISPER_DEVICE" = "cuda" ]; then
+  SP=$(./venv/bin/python -c "import site;print(site.getsitepackages()[0])")
+  export LD_LIBRARY_PATH="$SP/nvidia/cublas/lib:$SP/nvidia/cudnn/lib:$LD_LIBRARY_PATH"
+fi
 brave "file://$PWD/index.html" >/dev/null 2>&1 &
 exec ./venv/bin/python servidor.py

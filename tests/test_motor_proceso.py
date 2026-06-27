@@ -22,3 +22,8 @@ def test_process_text_en_normaliza_idioma():
 
 def test_process_text_vacio_devuelve_none():
     assert motor.process_text("es", "   ", translate_fn=fake_translate) is None
+
+def test_resaltados_locales_detecta_numeros():
+    out = [r["texto"] for r in motor.resaltados_locales("SSN 123 45 6789 modelo X-200 a las 3:30")]
+    assert "123 45 6789" in out and "200" in out and "3:30" in out
+    assert motor.resaltados_locales("sin numeros") == []
