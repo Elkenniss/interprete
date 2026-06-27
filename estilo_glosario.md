@@ -8,6 +8,12 @@
    para nadie. Ejemplo correcto: "¿qué le gusta comer a usted?".
 3. Resuelve los regionalismos del glosario de abajo a su significado real antes de traducir.
 4. El término "LEP" es interno: nunca aparece en la traducción.
+5. OMITE las muletillas y vacilaciones: interpreta solo el contenido con significado.
+   No traduzcas sonidos de duda (umm, ehh, amm, ehmm, este…, mmm) ni muletillas
+   verbales (o sea, ¿me entiendes?, déjame pensar, pues, este, like, you know, I mean,
+   uh, um) ni los falsos inicios/repeticiones de la propia vacilación. Ejemplo:
+   "emmm… déjame pensar… o sea, me duele aquí" → "It hurts here". Si tras quitar las
+   muletillas no queda contenido, devuelve traduccion vacía "".
 
 # Glosario LEP (español regional → significado / inglés)
 
