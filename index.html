@@ -5,9 +5,12 @@
 <title>Intérprete en vivo</title>
 <style>
   body { margin:0; font-family:system-ui, sans-serif; background:#111; color:#eee; }
-  header { padding:6px 12px; background:#000; font-size:14px; }
-  #estado { float:right; }
-  .grid { display:grid; grid-template-columns:1fr 1fr; height:calc(100vh - 34px); }
+  header { padding:6px 12px; background:#000; font-size:14px; display:flex; align-items:center; gap:8px; }
+  header .titulo { font-weight:600; }
+  header .sp { margin-left:auto; }
+  header button { background:#222; color:#eee; border:1px solid #444; border-radius:6px; padding:3px 9px; cursor:pointer; font-size:13px; }
+  header button:hover { background:#333; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; height:calc(100vh - 36px); }
   .panel { display:flex; flex-direction:column; overflow:hidden; border-left:1px solid #333; }
   .panel h2 { margin:0; padding:6px 10px; font-size:14px; background:#1b1b1b; }
   .es h2 { background:#14331f; } .en h2 { background:#142033; }
@@ -19,35 +22,106 @@
   @keyframes flash { from { background:#3a3a00; } to { background:transparent; } }
   .chip { display:inline-block; font-size:11px; padding:1px 6px; border-radius:8px; margin:2px 2px 0 0; }
   .numero{background:#553;} .direccion{background:#355;} .nombre{background:#535;} .fecha{background:#544;}
+  /* historial */
+  .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); align-items:center; justify-content:center; z-index:10; }
+  .modal-card { background:#1a1a1a; width:min(900px,92vw); height:min(80vh,90vh); border:1px solid #444; border-radius:10px; display:flex; flex-direction:column; overflow:hidden; }
+  .modal-head { display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:#000; }
+  .modal-body { overflow-y:auto; padding:10px; flex:1; }
+  .modal button { background:#222; color:#eee; border:1px solid #444; border-radius:6px; padding:3px 9px; cursor:pointer; }
+  .modal button:hover { background:#333; }
+  .hist-top { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+  .hist-item { display:flex; justify-content:space-between; align-items:center; padding:9px 6px; border-bottom:1px solid #2a2a2a; }
+  .hist-item .abrir { cursor:pointer; flex:1; }
+  .hist-item .abrir:hover { color:#9cf; }
+  .solo-lectura { font-size:11px; color:#999; border:1px solid #444; border-radius:8px; padding:1px 6px; }
+  .vacio { color:#888; text-align:center; margin-top:40px; }
 </style>
 </head>
 <body>
-<header>Intérprete en vivo <span id="cuota" title="Caracteres DeepL usados este mes"></span> <span id="estado">conectando…</span></header>
+<header>
+  <span class="titulo">Intérprete en vivo</span>
+  <button onclick="limpiar()" title="Archiva la conversación actual en el historial y limpia la pantalla">🧹 Limpiar</button>
+  <button onclick="abrirHist()" title="Ver conversaciones guardadas">🕘 Historial</button>
+  <span class="sp"></span>
+  <span id="cuota" title="Caracteres DeepL usados este mes"></span>
+  <span id="estado">conectando…</span>
+</header>
 <div class="grid">
   <section class="panel es"><h2>🇪🇸 Cliente (español) — original · interpretación</h2><div class="feed" id="feed-es"></div></section>
   <section class="panel en"><h2>🇺🇸 Representante (inglés) — original · interpretación</h2><div class="feed" id="feed-en"></div></section>
 </div>
+
+<div id="modal" class="modal">
+  <div class="modal-card">
+    <div class="modal-head"><b>🕘 Historial de conversaciones</b><button onclick="cerrarHist()">✕</button></div>
+    <div id="modal-body" class="modal-body"></div>
+  </div>
+</div>
+
 <script>
+const KEY = "interprete_historial";
 const estado = document.getElementById("estado");
 const cuota = document.getElementById("cuota");
+const feedEs = document.getElementById("feed-es");
+const feedEn = document.getElementById("feed-en");
+const modal = document.getElementById("modal");
+const modalBody = document.getElementById("modal-body");
+let sesion = [];  // intervenciones de la sesión EN VIVO (lo que llega va siempre aquí)
+
+function chips(res){
+  return (res||[]).map(r => `<span class="chip ${r.tipo}">${r.texto}</span>`).join("");
+}
+function rowHTML(iv, bandera){
+  const h = (bandera ? (iv.idioma === "es" ? "🇪🇸 " : "🇺🇸 ") : "") + iv.hora;
+  return `<div class="row"><div class="orig"><span class="hora">${h}</span><br>${iv.original}</div>`
+       + `<div class="trad">${iv.traduccion}<br>${chips(iv.resaltados)}</div></div>`;
+}
+function add(iv){
+  sesion.push(iv);
+  const feed = iv.idioma === "es" ? feedEs : feedEn;
+  feed.insertAdjacentHTML("beforeend", rowHTML(iv));
+  feed.lastElementChild.classList.add("nuevo");
+  feed.scrollTop = feed.scrollHeight;
+}
 function verUso(u){
   if(!u.limit){ cuota.textContent = ""; return; }
   const pct = Math.round(u.count / u.limit * 100);
   cuota.textContent = `DeepL ${u.count.toLocaleString()}/${u.limit.toLocaleString()} (${pct}%)`;
   cuota.style.color = pct >= 90 ? "#f66" : pct >= 70 ? "#fc6" : "#6c6";
 }
-function chips(res){
-  return (res||[]).map(r => `<span class="chip ${r.tipo}">${r.texto}</span>`).join("");
+
+// --- historial (todo en localStorage; el visor es solo lectura) ---
+function cargar(){ try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; } }
+function guardar(h){ localStorage.setItem(KEY, JSON.stringify(h)); }
+function limpiar(){
+  if(sesion.length){
+    const h = cargar();
+    h.unshift({ id: Date.now(), fecha: new Date().toLocaleString("es"), n: sesion.length, ivs: sesion });
+    guardar(h);
+  }
+  sesion = [];
+  feedEs.innerHTML = ""; feedEn.innerHTML = "";
 }
-function add(iv){
-  const feed = document.getElementById(iv.idioma === "es" ? "feed-es" : "feed-en");
-  const row = document.createElement("div");
-  row.className = "row nuevo";
-  row.innerHTML = `<div class="orig"><span class="hora">${iv.hora}</span><br>${iv.original}</div>`
-                + `<div class="trad">${iv.traduccion}<br>${chips(iv.resaltados)}</div>`;
-  feed.appendChild(row);
-  feed.scrollTop = feed.scrollHeight;
+function abrirHist(){ modal.style.display = "flex"; listaHist(); }
+function cerrarHist(){ modal.style.display = "none"; }
+function listaHist(){
+  const h = cargar();
+  if(!h.length){ modalBody.innerHTML = "<p class='vacio'>No hay conversaciones guardadas.</p>"; return; }
+  modalBody.innerHTML =
+    `<div class="hist-top"><button onclick="borrarTodo()">🗑 Borrar todo</button></div>` +
+    h.map(c => `<div class="hist-item"><span class="abrir" onclick="verHist(${c.id})">📄 ${c.fecha} — ${c.n} intervenciones</span>`
+             + `<button onclick="borrarUno(${c.id})">🗑</button></div>`).join("");
 }
+function verHist(id){
+  const c = cargar().find(x => x.id === id);
+  if(!c) return;
+  modalBody.innerHTML =
+    `<div class="hist-top"><button onclick="listaHist()">← Volver</button> <b>${c.fecha}</b> <span class="solo-lectura">solo lectura</span></div>`
+    + c.ivs.map(iv => rowHTML(iv, true)).join("");
+}
+function borrarUno(id){ guardar(cargar().filter(x => x.id !== id)); listaHist(); }
+function borrarTodo(){ if(confirm("¿Borrar TODO el historial guardado?")){ localStorage.removeItem(KEY); listaHist(); } }
+
 function connect(){
   const ws = new WebSocket("ws://localhost:8765");
   ws.onopen = () => estado.textContent = "● en vivo";
