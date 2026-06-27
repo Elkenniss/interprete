@@ -9,9 +9,10 @@ def test_frame_bytes():
 
 def test_record_command_tiene_formato():
     cmd = captura.record_command("foo.monitor")
-    assert "pw-record" in cmd[0]
-    assert "foo.monitor" in cmd
-    assert "16000" in cmd
+    assert "parec" in cmd[0]
+    assert "--device=foo.monitor" in cmd
+    assert "--rate=16000" in cmd
+    assert "--format=s16le" in cmd
 
 def test_segmenter_emite_tras_silencio():
     seg = captura.Segmenter(rms_threshold=500, hang_ms=90, min_ms=30)

@@ -11,8 +11,10 @@ def monitor_source() -> str:
     return sink + ".monitor"
 
 def record_command(monitor: str) -> list[str]:
-    return ["pw-record", "--target", monitor,
-            "--rate", str(RATE), "--channels", "1", "--format", "s16", "-"]
+    # parec se engancha al monitor por nombre de forma fiable; pw-record --target
+    # por nombre no captura el monitor (cae a una fuente muda).
+    return ["parec", "--device=" + monitor,
+            "--rate=" + str(RATE), "--channels=1", "--format=s16le"]
 
 def _rms(frame: bytes) -> float:
     x = np.frombuffer(frame, dtype=np.int16).astype(np.float32)
