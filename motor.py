@@ -24,15 +24,15 @@ def build_prompt(original: str, direction: str) -> str:
     )
 
 def parse_response(raw: str) -> dict:
-    s = raw.strip()
-    m = re.search(r"\{.*\}", s, re.DOTALL)  # extrae el objeto JSON aunque venga con fences
-    if m:
+    s = re.sub(r"^```json\s*|\s*```$", "", raw.strip())
+    try:
+        d = json.loads(s)
+    except json.JSONDecodeError:
+        m = re.search(r"\{.*?\}", s, re.DOTALL)
+        if not m:
+            return {"traduccion": "", "resaltados": []}
         try:
             d = json.loads(m.group(0))
-            return {
-                "traduccion": str(d.get("traduccion", "")),
-                "resaltados": d.get("resaltados", []) or [],
-            }
         except json.JSONDecodeError:
-            pass
-    return {"traduccion": "", "resaltados": []}
+            return {"traduccion": "", "resaltados": []}
+    return {"traduccion": str(d.get("traduccion", "")), "resaltados": d.get("resaltados", []) or []}

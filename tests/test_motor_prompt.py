@@ -28,3 +28,8 @@ def test_parse_response_invalido_devuelve_vacio():
     d = motor.parse_response("no soy json")
     assert d["traduccion"] == ""
     assert d["resaltados"] == []
+
+def test_parse_response_con_texto_extra_con_llave():
+    raw = '{"traduccion":"ok","resaltados":[]} (nota: {abreviatura})'
+    d = motor.parse_response(raw)
+    assert d["traduccion"] == "ok"
