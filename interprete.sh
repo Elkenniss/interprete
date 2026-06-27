@@ -10,6 +10,9 @@ fi
 if [ "$WHISPER_DEVICE" = "cuda" ]; then
   SP=$(./venv/bin/python -c "import site;print(site.getsitepackages()[0])")
   export LD_LIBRARY_PATH="$SP/nvidia/cublas/lib:$SP/nvidia/cudnn/lib:$LD_LIBRARY_PATH"
+  # voxtype (daemon Vulkan) compite por la VRAM con large-v3; lo paramos para dar aire.
+  # Reactivar luego con: systemctl --user start voxtype.service
+  systemctl --user stop voxtype.service 2>/dev/null || true
 fi
 brave "file://$PWD/index.html" >/dev/null 2>&1 &
 exec ./venv/bin/python servidor.py
