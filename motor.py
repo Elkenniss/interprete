@@ -1,8 +1,13 @@
 import json
+import os
 import re
+import time
+import urllib.request
 from pathlib import Path
 
 _ESTILO = None
+
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
 
 def load_estilo() -> str:
     global _ESTILO
@@ -36,3 +41,35 @@ def parse_response(raw: str) -> dict:
         except json.JSONDecodeError:
             return {"traduccion": "", "resaltados": []}
     return {"traduccion": str(d.get("traduccion", "")), "resaltados": d.get("resaltados", []) or []}
+
+def gemini_translate(original: str, direction: str) -> dict:
+    key = os.environ["GEMINI_API_KEY"]
+    url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+           f"{GEMINI_MODEL}:generateContent?key={key}")
+    body = json.dumps({
+        "contents": [{"parts": [{"text": build_prompt(original, direction)}]}],
+        "generationConfig": {"temperature": 0.2, "response_mime_type": "application/json"},
+    }).encode("utf-8")
+    req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            data = json.loads(r.read())
+        text = data["candidates"][0]["content"]["parts"][0]["text"]
+        return parse_response(text)
+    except Exception:
+        return {"traduccion": "", "resaltados": []}
+
+def lang_to_direction(lang: str) -> str:
+    return "es2en" if lang == "es" else "en2es"
+
+def build_intervencion(lang, original, traduccion, resaltados, hora) -> dict:
+    return {"hora": hora, "idioma": "es" if lang == "es" else "en",
+            "original": original, "traduccion": traduccion, "resaltados": resaltados}
+
+def process_text(lang: str, original: str, translate_fn=gemini_translate):
+    original = original.strip()
+    if not original:
+        return None
+    res = translate_fn(original, lang_to_direction(lang))
+    return build_intervencion(lang, original, res["traduccion"], res["resaltados"],
+                              time.strftime("%H:%M:%S"))
