@@ -41,6 +41,11 @@
   .hist-item .abrir:hover { color:#9cf; }
   .solo-lectura { font-size:11px; color:#999; border:1px solid #444; border-radius:8px; padding:1px 6px; }
   .vacio { color:#888; text-align:center; margin-top:40px; }
+  /* notas flotantes */
+  #notas { display:none; position:fixed; right:16px; bottom:16px; width:300px; height:260px; background:#1a1a1a; border:1px solid #555; border-radius:10px; flex-direction:column; z-index:9; box-shadow:0 4px 20px rgba(0,0,0,.5); }
+  #notas .nh { display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:#000; border-radius:10px 10px 0 0; }
+  #notas .nh button { background:#222; color:#eee; border:1px solid #444; border-radius:6px; padding:2px 8px; cursor:pointer; }
+  #notas textarea { flex:1; background:#111; color:#eee; border:none; padding:10px; resize:none; font:14px system-ui,sans-serif; outline:none; border-radius:0 0 10px 10px; }
 </style>
 </head>
 <body>
@@ -49,6 +54,7 @@
   <button id="btn-cortar" class="cortar" onclick="cortar()" title="Mostrar YA la frase actual (atajo: barra espaciadora)">✂️ Mostrar ya</button>
   <button onclick="limpiar()" title="Archiva la conversación actual en el historial y limpia la pantalla">🧹 Limpiar</button>
   <button onclick="abrirHist()" title="Ver conversaciones guardadas">🕘 Historial</button>
+  <button onclick="toggleNotas()" title="Bloc de notas para apuntar nombres/datos">📝 Notas</button>
   <span class="sp"></span>
   <span id="cuota" title="Caracteres DeepL usados este mes"></span>
   <span id="estado">conectando…</span>
@@ -56,6 +62,11 @@
 <div class="grid">
   <section class="panel es"><h2>🇪🇸 Cliente (español) — original · interpretación</h2><div class="feed" id="feed-es"></div></section>
   <section class="panel en"><h2>🇺🇸 Representante (inglés) — original · interpretación</h2><div class="feed" id="feed-en"></div></section>
+</div>
+
+<div id="notas">
+  <div class="nh"><b>📝 Notas</b><span><button onclick="borrarNotas()">🗑 Borrar</button> <button onclick="toggleNotas()">✕</button></span></div>
+  <textarea id="notas-txt" placeholder="Apunta aquí nombres y datos para corroborar…"></textarea>
 </div>
 
 <div id="modal" class="modal">
@@ -168,9 +179,24 @@ function cortar(){  // tijera: pide procesar la frase actual ya, sin esperar el 
   btnCortar.classList.add("flash");
   setTimeout(() => btnCortar.classList.remove("flash"), 200);
 }
-document.addEventListener("keydown", e => {  // barra espaciadora = tijera (si no hay modal abierto)
-  if(e.code === "Space" && modal.style.display !== "flex"){ e.preventDefault(); cortar(); }
+document.addEventListener("keydown", e => {  // barra espaciadora = tijera
+  const escribiendo = e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT";
+  if(e.code === "Space" && !escribiendo && modal.style.display !== "flex"){ e.preventDefault(); cortar(); }
 });
+
+// --- bloc de notas (texto libre, autoguardado en localStorage) ---
+const NOTAS_KEY = "interprete_notas";
+const notas = document.getElementById("notas");
+const notasTxt = document.getElementById("notas-txt");
+notasTxt.value = localStorage.getItem(NOTAS_KEY) || "";
+notasTxt.addEventListener("input", () => localStorage.setItem(NOTAS_KEY, notasTxt.value));
+function toggleNotas(){
+  notas.style.display = notas.style.display === "flex" ? "none" : "flex";
+  if(notas.style.display === "flex") notasTxt.focus();
+}
+function borrarNotas(){
+  if(confirm("¿Borrar todas las notas?")){ notasTxt.value = ""; localStorage.removeItem(NOTAS_KEY); }
+}
 function connect(){
   ws = new WebSocket("ws://localhost:8765");
   ws.onopen = () => estado.textContent = "● en vivo";
