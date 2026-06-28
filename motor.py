@@ -197,10 +197,14 @@ def transcribe(pcm: bytes, model) -> tuple[str, str]:
     # vad_filter descarta tramos sin voz y no_speech_prob filtra alucinaciones
     # de Whisper sobre silencio/ruido (texto fantasma).
     segments, info = model.transcribe(audio, beam_size=1, vad_filter=True)
-    # La llamada es solo inglés/español. Un idioma improbable (ru, ar, zh…) es
-    # alucinación de Whisper sobre ruido; lo descartamos. Las lenguas romances
-    # (pt, gl, ca, it) suelen ser español mal detectado y sí se conservan.
-    if info.language not in ("en", "es", "pt", "gl", "ca", "it"):
-        return "", info.language
+    # La llamada es SOLO inglés o español. Si no es inglés, lo tratamos como español;
+    # y si Whisper lo detectó como otra lengua (pt/it/gl…), re-transcribimos forzando
+    # español para no quedarnos con texto en portugués.
+    if info.language == "en":
+        lang = "en"
+    else:
+        lang = "es"
+        if info.language != "es":
+            segments, info = model.transcribe(audio, beam_size=1, vad_filter=True, language="es")
     texto = " ".join(s.text for s in segments if s.no_speech_prob < 0.6).strip()
-    return texto, info.language
+    return texto, lang
