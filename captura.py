@@ -21,7 +21,7 @@ def _rms(frame: bytes) -> float:
     return float(np.sqrt(np.mean(x * x))) if len(x) else 0.0
 
 class Segmenter:
-    def __init__(self, rms_threshold=500, hang_ms=700, min_ms=300, max_ms=7000):
+    def __init__(self, rms_threshold=500, hang_ms=400, min_ms=300, max_ms=15000):
         self.threshold = rms_threshold
         self.hang_frames = max(1, hang_ms // FRAME_MS)
         self.min_frames = max(1, min_ms // FRAME_MS)
