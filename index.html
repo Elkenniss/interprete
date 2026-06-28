@@ -10,6 +10,9 @@
   header .sp { margin-left:auto; }
   header button { background:#222; color:#eee; border:1px solid #444; border-radius:6px; padding:3px 9px; cursor:pointer; font-size:13px; }
   header button:hover { background:#333; }
+  header button.cortar { background:#c0392b; border-color:#e74c3c; font-weight:600; }
+  header button.cortar:hover { background:#e74c3c; }
+  header button.cortar:active, header button.cortar.flash { background:#ff6b5b; transform:scale(0.96); }
   .grid { display:grid; grid-template-columns:1fr 1fr; height:calc(100vh - 36px); }
   .panel { display:flex; flex-direction:column; overflow:hidden; border-left:1px solid #333; }
   .panel h2 { margin:0; padding:6px 10px; font-size:14px; background:#1b1b1b; }
@@ -43,6 +46,7 @@
 <body>
 <header>
   <span class="titulo">Intérprete en vivo</span>
+  <button id="btn-cortar" class="cortar" onclick="cortar()" title="Mostrar YA la frase actual (atajo: barra espaciadora)">✂️ Mostrar ya</button>
   <button onclick="limpiar()" title="Archiva la conversación actual en el historial y limpia la pantalla">🧹 Limpiar</button>
   <button onclick="abrirHist()" title="Ver conversaciones guardadas">🕘 Historial</button>
   <span class="sp"></span>
@@ -158,6 +162,15 @@ function verHist(id){
 function borrarUno(id){ guardar(cargar().filter(x => x.id !== id)); listaHist(); }
 function borrarTodo(){ if(confirm("¿Borrar TODO el historial guardado?")){ localStorage.removeItem(KEY); listaHist(); } }
 
+const btnCortar = document.getElementById("btn-cortar");
+function cortar(){  // tijera: pide procesar la frase actual ya, sin esperar el silencio
+  if(ws && ws.readyState === 1) ws.send(JSON.stringify({ tipo: "cortar" }));
+  btnCortar.classList.add("flash");
+  setTimeout(() => btnCortar.classList.remove("flash"), 200);
+}
+document.addEventListener("keydown", e => {  // barra espaciadora = tijera (si no hay modal abierto)
+  if(e.code === "Space" && modal.style.display !== "flex"){ e.preventDefault(); cortar(); }
+});
 function connect(){
   ws = new WebSocket("ws://localhost:8765");
   ws.onopen = () => estado.textContent = "● en vivo";

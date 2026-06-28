@@ -41,3 +41,12 @@ def test_segmenter_corta_por_longitud_maxima():
     out = seg.feed(_frame(3000))
     assert out is not None
     assert len(out) == 3 * captura.FRAME_BYTES
+
+def test_flush_fuerza_cierre_inmediato():
+    seg = captura.Segmenter(rms_threshold=500, hang_ms=700, min_ms=300)
+    for _ in range(4):                 # 4 frames de habla, aún sin silencio
+        assert seg.feed(_frame(3000)) is None
+    out = seg.flush()                  # tijera: cierra ya, ignora hang y min_ms
+    assert out is not None
+    assert len(out) == 4 * captura.FRAME_BYTES
+    assert seg.flush() is None         # ya vacío

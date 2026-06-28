@@ -56,11 +56,25 @@ class Segmenter:
             return out if speech_frames >= self.min_frames else None
         return None
 
-def utterances(monitor=None):
+    def flush(self):
+        """Cierre forzado (botón tijera): devuelve la voz acumulada ya mismo,
+        sin esperar el silencio y sin exigir min_ms. None si no hay nada."""
+        if not self.buf:
+            return None
+        speech_frames = len(self.buf) - self.silence
+        frames = self.buf[:speech_frames] if speech_frames > 0 else self.buf
+        self.buf = []
+        self.silence = 0
+        self.in_speech = False
+        return b"".join(frames) or None
+
+def utterances(monitor=None, cortar=None):
     """Generador: lanza parec y produce PCM por intervención.
 
     Si parec muere a mitad de llamada (cambio de dispositivo, hipo del sistema),
     se relanza solo en vez de cortar la captura — una llamada dura horas.
+    `cortar` (threading.Event opcional): si está set, fuerza el cierre inmediato
+    del segmento actual (botón tijera), además del corte automático por silencio.
     """
     import time
     monitor = monitor or monitor_source()
@@ -75,6 +89,11 @@ def utterances(monitor=None):
                 out = seg.feed(frame)
                 if out is not None:
                     yield out
+                if cortar is not None and cortar.is_set():
+                    cortar.clear()
+                    forced = seg.flush()
+                    if forced is not None:
+                        yield forced
         finally:
             proc.terminate()
         print("[captura] parec se detuvo; relanzando en 1s…", flush=True)

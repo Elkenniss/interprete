@@ -1,11 +1,13 @@
 import asyncio
 import json
+import threading
 import websockets
 
 import captura
 import motor
 
 CLIENTS = set()
+CORTAR = threading.Event()  # botón tijera: fuerza el cierre del segmento actual
 
 async def broadcast(iv: dict):
     if CLIENTS:
@@ -23,6 +25,8 @@ async def handler(ws):
                     await ws.send(json.dumps(
                         {"tipo": "pron", "palabra": palabra, "pron": motor.pronunciacion_es(palabra)},
                         ensure_ascii=False))
+                elif d.get("tipo") == "cortar":
+                    CORTAR.set()
             except Exception:
                 pass
     finally:
@@ -39,7 +43,7 @@ def pipeline(loop):
     model = motor.load_model()
     send(loop, {"tipo": "uso", **motor.deepl_usage()})
     n = 0
-    for pcm in captura.utterances():
+    for pcm in captura.utterances(cortar=CORTAR):
         try:
             texto, lang = motor.transcribe(pcm, model)
             iv = motor.process_text(lang, texto)
