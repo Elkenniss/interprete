@@ -13,7 +13,9 @@ def monitor_source() -> str:
 def record_command(monitor: str) -> list[str]:
     # parec se engancha al monitor por nombre de forma fiable; pw-record --target
     # por nombre no captura el monitor (cae a una fuente muda).
-    return ["parec", "--device=" + monitor,
+    # --latency-msec bajo: sin esto parec bufferiza ~1-2s y el caption aparece tarde
+    # (sobre todo al usar la tijera). 100ms da inmediatez sin glitches.
+    return ["parec", "--device=" + monitor, "--latency-msec=100",
             "--rate=" + str(RATE), "--channels=1", "--format=s16le"]
 
 def _rms(frame: bytes) -> float:

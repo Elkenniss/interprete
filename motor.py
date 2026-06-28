@@ -185,6 +185,15 @@ def load_model():
         device = os.environ.get("WHISPER_DEVICE", "cpu")
         compute = "int8" if device == "cpu" else "int8_float16"
         _MODEL = WhisperModel(size, device=device, compute_type=compute, cpu_threads=8)
+        # Warmup: la 1ª transcripción real compila los kernels CUDA (~3s de retraso en la
+        # primera frase / 1ª tijera). Calentamos con RUIDO (no silencio: el VAD descartaría
+        # el silencio y nunca correría el decoder) y vad_filter=False, en ambos idiomas.
+        try:
+            for lng in ("es", "en"):
+                list(_MODEL.transcribe((0.1 * np.random.randn(16000)).astype(np.float32),
+                                       beam_size=1, vad_filter=False, language=lng)[0])
+        except Exception:
+            pass
     return _MODEL
 
 def transcribe(pcm: bytes, model) -> tuple[str, str]:
