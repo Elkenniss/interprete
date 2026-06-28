@@ -22,6 +22,9 @@
   @keyframes flash { from { background:#3a3a00; } to { background:transparent; } }
   .chip { display:inline-block; font-size:11px; padding:1px 6px; border-radius:8px; margin:2px 2px 0 0; }
   .numero{background:#553;} .direccion{background:#355;} .nombre{background:#535;} .fecha{background:#544;}
+  .trad .w { cursor:pointer; border-bottom:1px dotted #777; }
+  .trad .w:hover, .trad .w.activo { color:#9cf; }
+  .pron { color:#7d7; font-style:normal; font-weight:400; }
   /* historial */
   .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); align-items:center; justify-content:center; z-index:10; }
   .modal-card { background:#1a1a1a; width:min(900px,92vw); height:min(80vh,90vh); border:1px solid #444; border-radius:10px; display:flex; flex-direction:column; overflow:hidden; }
@@ -67,14 +70,47 @@ const feedEn = document.getElementById("feed-en");
 const modal = document.getElementById("modal");
 const modalBody = document.getElementById("modal-body");
 let sesion = [];  // intervenciones de la sesión EN VIVO (lo que llega va siempre aquí)
+let ws = null;
+const pronCache = {};   // palabra(min) -> pronunciación, para no re-pedir
+const pendientes = {};  // palabra(min) -> [spans esperando respuesta]
 
 function chips(res){
   return (res||[]).map(r => `<span class="chip ${r.tipo}">${r.texto}</span>`).join("");
 }
+function clicable(texto){  // envuelve cada palabra para poder pedir su pronunciación
+  return texto.replace(/[A-Za-z][A-Za-z']*/g, w => `<span class="w" onclick="pronunciar(this)">${w}</span>`);
+}
 function rowHTML(iv, bandera){
   const h = (bandera ? (iv.idioma === "es" ? "🇪🇸 " : "🇺🇸 ") : "") + iv.hora;
+  // La interpretación al inglés (cuando el original es español) lleva palabras clicables.
+  const trad = iv.idioma === "es" ? clicable(iv.traduccion) : iv.traduccion;
   return `<div class="row"><div class="orig"><span class="hora">${h}</span><br>${iv.original}</div>`
-       + `<div class="trad">${iv.traduccion}<br>${chips(iv.resaltados)}</div></div>`;
+       + `<div class="trad">${trad}<br>${chips(iv.resaltados)}</div></div>`;
+}
+function mostrarPron(el, pron){
+  const tag = document.createElement("i");
+  tag.className = "pron";
+  tag.textContent = pron ? ` "${pron}"` : " (?)";
+  el.after(tag);
+  el._pron = tag;
+}
+function pronunciar(el){
+  if(el.classList.contains("activo")){  // segundo clic: ocultar
+    el.classList.remove("activo");
+    if(el._pron){ el._pron.remove(); el._pron = null; }
+    return;
+  }
+  el.classList.add("activo");
+  const w = el.textContent.toLowerCase();
+  if(w in pronCache){ mostrarPron(el, pronCache[w]); return; }
+  (pendientes[w] = pendientes[w] || []).push(el);
+  if(ws && ws.readyState === 1) ws.send(JSON.stringify({ tipo: "pron", palabra: el.textContent }));
+}
+function recibirPron(m){
+  const w = (m.palabra || "").toLowerCase();
+  pronCache[w] = m.pron;
+  (pendientes[w] || []).forEach(el => { if(el.classList.contains("activo") && !el._pron) mostrarPron(el, m.pron); });
+  pendientes[w] = [];
 }
 function add(iv){
   sesion.push(iv);
@@ -123,10 +159,15 @@ function borrarUno(id){ guardar(cargar().filter(x => x.id !== id)); listaHist();
 function borrarTodo(){ if(confirm("¿Borrar TODO el historial guardado?")){ localStorage.removeItem(KEY); listaHist(); } }
 
 function connect(){
-  const ws = new WebSocket("ws://localhost:8765");
+  ws = new WebSocket("ws://localhost:8765");
   ws.onopen = () => estado.textContent = "● en vivo";
   ws.onclose = () => { estado.textContent = "desconectado, reintentando…"; setTimeout(connect, 1500); };
-  ws.onmessage = e => { const m = JSON.parse(e.data); m.tipo === "uso" ? verUso(m) : add(m); };
+  ws.onmessage = e => {
+    const m = JSON.parse(e.data);
+    if(m.tipo === "uso") verUso(m);
+    else if(m.tipo === "pron") recibirPron(m);
+    else add(m);
+  };
 }
 connect();
 </script>

@@ -27,3 +27,8 @@ def test_resaltados_locales_detecta_numeros():
     out = [r["texto"] for r in motor.resaltados_locales("SSN 123 45 6789 modelo X-200 a las 3:30")]
     assert "123 45 6789" in out and "200" in out and "3:30" in out
     assert motor.resaltados_locales("sin numeros") == []
+
+def test_pronunciacion_es():
+    assert motor.pronunciacion_es("number") == "nAmber"   # tónica en mayúscula
+    assert motor.pronunciacion_es("Please!") == "plIs"    # limpia signos y mayúsculas
+    assert motor.pronunciacion_es("zxqwkjj") == ""        # fuera del diccionario

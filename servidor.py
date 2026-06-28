@@ -15,7 +15,16 @@ async def broadcast(iv: dict):
 async def handler(ws):
     CLIENTS.add(ws)
     try:
-        await ws.wait_closed()
+        async for msg in ws:  # el cliente pide la pronunciación de una palabra al hacer clic
+            try:
+                d = json.loads(msg)
+                if d.get("tipo") == "pron":
+                    palabra = d.get("palabra", "")
+                    await ws.send(json.dumps(
+                        {"tipo": "pron", "palabra": palabra, "pron": motor.pronunciacion_es(palabra)},
+                        ensure_ascii=False))
+            except Exception:
+                pass
     finally:
         CLIENTS.discard(ws)
 

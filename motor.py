@@ -95,6 +95,41 @@ def resaltados_locales(texto: str) -> list:
             out.append({"texto": t, "tipo": "numero"})
     return out
 
+# Pronunciación "a la española" de una palabra inglesa: CMU da los fonemas (ARPABET)
+# y los mapeamos a sílabas que un hispanohablante lee tal cual. La vocal tónica
+# (stress 1) va en MAYÚSCULA para marcar dónde cargar la fuerza. Es aproximado, guía.
+_VOCALES_ARPA = {"AA": "a", "AE": "a", "AH": "a", "AO": "o", "AW": "au", "AY": "ai",
+                 "EH": "e", "ER": "er", "EY": "ei", "IH": "i", "IY": "i",
+                 "OW": "ou", "OY": "oi", "UH": "u", "UW": "u"}
+_CONS_ARPA = {"B": "b", "CH": "ch", "D": "d", "DH": "d", "F": "f", "G": "g", "HH": "j",
+              "JH": "y", "K": "k", "L": "l", "M": "m", "N": "n", "NG": "ng", "P": "p",
+              "R": "r", "S": "s", "SH": "sh", "T": "t", "TH": "z", "V": "v", "W": "u",
+              "Y": "i", "Z": "s", "ZH": "y"}
+_CMU = None
+
+def _cmu():
+    global _CMU
+    if _CMU is None:
+        import cmudict
+        _CMU = cmudict.dict()
+    return _CMU
+
+def pronunciacion_es(palabra: str) -> str:
+    w = re.sub(r"[^a-z']", "", palabra.lower())
+    fons = _cmu().get(w) if w else None
+    if not fons:
+        return ""
+    out = []
+    for f in fons[0]:
+        stress = f[-1] if f[-1].isdigit() else ""
+        base = f[:-1] if stress else f
+        if base in _VOCALES_ARPA:
+            s = _VOCALES_ARPA[base]
+            out.append(s.upper() if stress == "1" else s)
+        else:
+            out.append(_CONS_ARPA.get(base, ""))
+    return "".join(out)
+
 def translate(original: str, direction: str) -> dict:
     # Primario por env (TRADUCTOR), con fallback automático al otro: si el primario
     # falla o agota cuota devuelve traducción vacía, y saltamos al secundario para
