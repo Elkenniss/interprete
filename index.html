@@ -43,7 +43,7 @@
   .vacio { color:#888; text-align:center; margin-top:40px; }
   /* notas flotantes */
   #notas { display:none; position:fixed; right:16px; bottom:16px; width:300px; height:260px; background:#1a1a1a; border:1px solid #555; border-radius:10px; flex-direction:column; z-index:9; box-shadow:0 4px 20px rgba(0,0,0,.5); }
-  #notas .nh { display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:#000; border-radius:10px 10px 0 0; }
+  #notas .nh { display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:#000; border-radius:10px 10px 0 0; cursor:move; user-select:none; }
   #notas .nh button { background:#222; color:#eee; border:1px solid #444; border-radius:6px; padding:2px 8px; cursor:pointer; }
   #notas textarea { flex:1; background:#111; color:#eee; border:none; padding:10px; resize:none; font:14px system-ui,sans-serif; outline:none; border-radius:0 0 10px 10px; }
 </style>
@@ -197,6 +197,29 @@ function toggleNotas(){
 function borrarNotas(){
   if(confirm("¿Borrar todas las notas?")){ notasTxt.value = ""; localStorage.removeItem(NOTAS_KEY); }
 }
+// arrastrar la ventana de notas por su cabecera; recuerda la posición
+const NOTAS_POS = "interprete_notas_pos";
+const posGuardada = JSON.parse(localStorage.getItem(NOTAS_POS) || "null");
+if(posGuardada){ Object.assign(notas.style, posGuardada); }
+let arrastre = null;
+notas.querySelector(".nh").addEventListener("mousedown", e => {
+  if(e.target.tagName === "BUTTON") return;  // los botones no arrastran
+  arrastre = { x: e.clientX, y: e.clientY, left: notas.offsetLeft, top: notas.offsetTop };
+  e.preventDefault();
+});
+document.addEventListener("mousemove", e => {
+  if(!arrastre) return;
+  Object.assign(notas.style, {
+    left: (arrastre.left + e.clientX - arrastre.x) + "px",
+    top:  (arrastre.top  + e.clientY - arrastre.y) + "px",
+    right: "auto", bottom: "auto"
+  });
+});
+document.addEventListener("mouseup", () => {
+  if(!arrastre) return;
+  arrastre = null;
+  localStorage.setItem(NOTAS_POS, JSON.stringify({ left: notas.style.left, top: notas.style.top, right: "auto", bottom: "auto" }));
+});
 function connect(){
   ws = new WebSocket("ws://localhost:8765");
   ws.onopen = () => estado.textContent = "● en vivo";
