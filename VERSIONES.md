@@ -9,6 +9,7 @@ Rollback: pedirle a Claude "regresame a la vN" (git guarda todas).
 
 | Versión | Commit | Fecha | Qué se hizo | Check | Comentario |
 |---------|---------|-------|-------------|-------|------------|
+| v33 | 00c3197 | 2026-07-05 | Deletreo: corrige E (`Ii`→`Íi`) y U (`Iu`→`Yu`); la I mayúscula se veía como l. | ⏳ | Recargar Brave (F5). |
 | v32 | 93656d1 | 2026-07-05 | Panel de deletreo movible (arrastre reutilizable `hacerMovible`, aplicado a Notas y Deletreo). Regla: toda ventana flotante debe ser movible. | ⏳ | Recargar Brave (F5). Se arrastra por la cabecera negra. |
 | v31 | 126590c | 2026-07-05 | Panel 🔤 Deletrear: escribir palabra → filas letra a letra (nombre inglés + OTAN + pronunciación) + botón Ver A-Z. Solo frontend. | ⏳ | Recargar la pestaña de Brave (F5) para verlo. |
 | v30 | 5508ecc | 2026-07-05 | Captions en vivo (~0.6-1.3s), toggle preciso/rápido, botón de apagado, log de errores de traducción | ⏳ | Se probó un reintento x3 de DeepL y se revirtió el mismo día: trababa las traducciones hasta 45s. Lección: nada de esperas largas en el camino en vivo. |
