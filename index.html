@@ -13,6 +13,9 @@
   header button.cortar { background:#c0392b; border-color:#e74c3c; font-weight:600; }
   header button.cortar:hover { background:#e74c3c; }
   header button.cortar:active, header button.cortar.flash { background:#ff6b5b; transform:scale(0.96); }
+  header button.poder-off { background:#14512a; border-color:#2ecc71; font-weight:600; animation:late 1.6s infinite; }
+  @keyframes late { 50% { background:#1e7a3f; } }
+  body.pausada .grid { opacity:.35; }
   .grid { display:grid; grid-template-columns:1fr 1fr; height:calc(100vh - 36px); }
   .panel { display:flex; flex-direction:column; overflow:hidden; border-left:1px solid #333; }
   .panel h2 { margin:0; padding:6px 10px; font-size:14px; background:#1b1b1b; }
@@ -22,6 +25,7 @@
   .orig { color:#bbb; } .trad { color:#fff; font-weight:600; }
   .hora { font-size:11px; color:#666; }
   .nuevo { animation:flash 1s; }
+  .row.parcial { opacity:.55; font-style:italic; border-bottom:1px dashed #555; }
   @keyframes flash { from { background:#3a3a00; } to { background:transparent; } }
   .chip { display:inline-block; font-size:11px; padding:1px 6px; border-radius:8px; margin:2px 2px 0 0; }
   .numero{background:#553;} .direccion{background:#355;} .nombre{background:#535;} .fecha{background:#544;}
@@ -51,7 +55,9 @@
 <body>
 <header>
   <span class="titulo">Intérprete en vivo</span>
+  <button id="btn-poder" onclick="togglePoder()" title="Apagar/encender la transcripción: apagado no gasta GPU ni cuota de DeepL (ideal para ver videos en tiempo muerto)">⏻ Apagar</button>
   <button id="btn-cortar" class="cortar" onclick="cortar()" title="Mostrar YA la frase actual (atajo: barra espaciadora)">✂️ Mostrar ya</button>
+  <button id="btn-motor" onclick="toggleMotor()" title="Cambiar entre motor preciso (más lento) y rápido (menos preciso)">🎯 Preciso</button>
   <button onclick="limpiar()" title="Archiva la conversación actual en el historial y limpia la pantalla">🧹 Limpiar</button>
   <button onclick="abrirHist()" title="Ver conversaciones guardadas">🕘 Historial</button>
   <button onclick="toggleNotas()" title="Bloc de notas para apuntar nombres/datos">📝 Notas</button>
@@ -127,7 +133,24 @@ function recibirPron(m){
   (pendientes[w] || []).forEach(el => { if(el.classList.contains("activo") && !el._pron) mostrarPron(el, m.pron); });
   pendientes[w] = [];
 }
+// --- caption provisional (en vivo, se reemplaza por la versión final) ---
+function limpiarParciales(fin){
+  document.querySelectorAll(".row.parcial").forEach(el => el.remove());
+  if(fin) ultTradParcial = "";  // frase cerrada: la traducción vieja ya no aplica
+}
+let ultTradParcial = "";  // la traducción llega ~0.5s después del original: mientras, mostramos la anterior
+function verParcial(m){
+  if(!m.original) return;
+  if(m.traduccion) ultTradParcial = m.traduccion;
+  limpiarParciales();  // solo hay un hablante a la vez; un único parcial activo
+  const feed = m.idioma === "es" ? feedEs : feedEn;
+  feed.insertAdjacentHTML("beforeend",
+    `<div class="row parcial"><div class="orig"><span class="hora">✏️ en vivo…</span><br>${m.original}</div>`
+    + `<div class="trad">${m.traduccion || ultTradParcial || "…"}</div></div>`);
+  feed.scrollTop = feed.scrollHeight;
+}
 function add(iv){
+  limpiarParciales(true);
   sesion.push(iv);
   const feed = iv.idioma === "es" ? feedEs : feedEn;
   feed.insertAdjacentHTML("beforeend", rowHTML(iv));
@@ -179,6 +202,27 @@ function cortar(){  // tijera: pide procesar la frase actual ya, sin esperar el 
   btnCortar.classList.add("flash");
   setTimeout(() => btnCortar.classList.remove("flash"), 200);
 }
+const btnPoder = document.getElementById("btn-poder");
+function togglePoder(){
+  if(ws && ws.readyState === 1) ws.send(JSON.stringify({ tipo: "poder" }));
+}
+function verPoder(m){
+  btnPoder.textContent = m.on ? "⏻ Apagar" : "▶️ Encender";
+  btnPoder.classList.toggle("poder-off", !m.on);
+  document.body.classList.toggle("pausada", !m.on);
+  estado.textContent = m.on ? "● en vivo" : "⏸ apagado — no gasta nada";
+  if(!m.on) limpiarParciales();
+}
+const btnMotor = document.getElementById("btn-motor");
+function toggleMotor(){
+  if(ws && ws.readyState === 1){
+    btnMotor.textContent = "⏳ cambiando…";  // la 1ª carga del modelo tarda unos segundos
+    ws.send(JSON.stringify({ tipo: "motor" }));
+  }
+}
+function verMotor(m){
+  btnMotor.textContent = m.modo === "rapido" ? "⚡ Rápido" : "🎯 Preciso";
+}
 document.addEventListener("keydown", e => {  // barra espaciadora = tijera
   const escribiendo = e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT";
   if(e.code === "Space" && !escribiendo && modal.style.display !== "flex"){ e.preventDefault(); cortar(); }
@@ -228,6 +272,10 @@ function connect(){
     const m = JSON.parse(e.data);
     if(m.tipo === "uso") verUso(m);
     else if(m.tipo === "pron") recibirPron(m);
+    else if(m.tipo === "motor") verMotor(m);
+    else if(m.tipo === "parcial") verParcial(m);
+    else if(m.tipo === "parcial_fin") limpiarParciales(true);
+    else if(m.tipo === "poder") verPoder(m);
     else add(m);
   };
 }

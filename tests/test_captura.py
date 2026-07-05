@@ -42,6 +42,59 @@ def test_segmenter_corta_por_longitud_maxima():
     assert out is not None
     assert len(out) == 3 * captura.FRAME_BYTES
 
+def test_utterances_emite_parciales(monkeypatch):
+    # parec falso: 40 frames de habla (1.2s) y luego silencio hasta cerrar por hang.
+    import io
+    audio = _frame(3000) * 40 + _frame(0) * 40
+
+    class FakeProc:
+        def __init__(self):
+            self.stdout = io.BytesIO(audio)
+        def terminate(self):
+            pass
+
+    procs = iter([FakeProc()])
+    monkeypatch.setattr(captura.subprocess, "Popen",
+                        lambda *a, **k: next(procs))  # 2ª llamada: StopIteration corta el test
+    parciales = []
+    gen = captura.utterances(monitor="fake", parcial=parciales.append, parcial_ms=300)
+    try:
+        finales = [next(gen)]
+    except StopIteration:
+        finales = []
+    # parcial_ms=300 => snapshot cada 10 frames de habla: crecen y llegan varios
+    assert len(parciales) >= 2
+    assert len(parciales[0]) < len(parciales[1])
+    assert len(parciales[0]) == 10 * captura.FRAME_BYTES
+    # y la frase final completa salió igual que siempre (40 frames de habla)
+    assert finales and len(finales[0]) == 40 * captura.FRAME_BYTES
+
+def test_utterances_pausado_descarta_todo(monkeypatch):
+    # Mismo audio que arriba, pero con el interruptor apagado: ni parciales ni frases.
+    import io, threading, time
+    audio = _frame(3000) * 40 + _frame(0) * 40
+
+    class FakeProc:
+        def __init__(self):
+            self.stdout = io.BytesIO(audio)
+        def terminate(self):
+            pass
+
+    procs = iter([FakeProc()])
+    monkeypatch.setattr(captura.subprocess, "Popen", lambda *a, **k: next(procs))
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+    pausado = threading.Event()
+    pausado.set()
+    parciales = []
+    gen = captura.utterances(monitor="fake", parcial=parciales.append,
+                             parcial_ms=300, pausado=pausado)
+    try:
+        out = next(gen)
+        assert False, f"apagado no debería emitir nada, emitió {len(out)} bytes"
+    except RuntimeError:  # el 2º Popen agota el iter: fin del audio sin emisiones
+        pass
+    assert parciales == []
+
 def test_flush_fuerza_cierre_inmediato():
     seg = captura.Segmenter(rms_threshold=500, hang_ms=700, min_ms=300)
     for _ in range(4):                 # 4 frames de habla, aún sin silencio

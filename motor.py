@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 
 _ESTILO = None
-_MODEL = None
+_MODELS = {}  # tamaño -> WhisperModel; conviven preciso y rápido para cambiar al vuelo
 
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
@@ -60,7 +60,8 @@ def gemini_translate(original: str, direction: str) -> dict:
             data = json.loads(r.read())
         text = data["candidates"][0]["content"]["parts"][0]["text"]
         return parse_response(text)
-    except Exception:
+    except Exception as e:
+        print("[gemini] falló:", e, flush=True)
         return {"traduccion": "", "resaltados": []}
 
 def deepl_translate(original: str, direction: str) -> dict:
@@ -78,7 +79,8 @@ def deepl_translate(original: str, direction: str) -> dict:
         with urllib.request.urlopen(req, timeout=15) as r:
             d = json.loads(r.read())
         return {"traduccion": d["translations"][0]["text"], "resaltados": []}
-    except Exception:
+    except Exception as e:
+        print("[deepl] falló:", e, flush=True)
         return {"traduccion": "", "resaltados": []}
 
 # Números/horas/fechas numéricas en el texto: Whisper ya convierte los dígitos
@@ -177,24 +179,24 @@ def process_text(lang: str, original: str, translate_fn=translate):
 def pcm_to_float32(pcm: bytes) -> "np.ndarray":
     return np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
 
-def load_model():
-    global _MODEL
-    if _MODEL is None:
+def load_model(size=None):
+    size = size or os.environ.get("WHISPER_MODEL", "small")
+    if size not in _MODELS:
         from faster_whisper import WhisperModel
-        size = os.environ.get("WHISPER_MODEL", "small")
         device = os.environ.get("WHISPER_DEVICE", "cpu")
         compute = "int8" if device == "cpu" else "int8_float16"
-        _MODEL = WhisperModel(size, device=device, compute_type=compute, cpu_threads=8)
+        m = WhisperModel(size, device=device, compute_type=compute, cpu_threads=8)
         # Warmup: la 1ª transcripción real compila los kernels CUDA (~3s de retraso en la
         # primera frase / 1ª tijera). Calentamos con RUIDO (no silencio: el VAD descartaría
         # el silencio y nunca correría el decoder) y vad_filter=False, en ambos idiomas.
         try:
             for lng in ("es", "en"):
-                list(_MODEL.transcribe((0.1 * np.random.randn(16000)).astype(np.float32),
-                                       beam_size=1, vad_filter=False, language=lng)[0])
+                list(m.transcribe((0.1 * np.random.randn(16000)).astype(np.float32),
+                                  beam_size=1, vad_filter=False, language=lng)[0])
         except Exception:
             pass
-    return _MODEL
+        _MODELS[size] = m
+    return _MODELS[size]
 
 def transcribe(pcm: bytes, model) -> tuple[str, str]:
     audio = pcm_to_float32(pcm)

@@ -70,17 +70,25 @@ class Segmenter:
         self.in_speech = False
         return b"".join(frames) or None
 
-def utterances(monitor=None, cortar=None):
+def utterances(monitor=None, cortar=None, parcial=None, parcial_ms=2000, pausado=None):
     """Generador: lanza parec y produce PCM por intervención.
 
     Si parec muere a mitad de llamada (cambio de dispositivo, hipo del sistema),
     se relanza solo en vez de cortar la captura — una llamada dura horas.
     `cortar` (threading.Event opcional): si está set, fuerza el cierre inmediato
     del segmento actual (botón tijera), además del corte automático por silencio.
+    `parcial` (callable opcional): recibe un snapshot del PCM acumulado cada
+    ~parcial_ms de habla, para caption provisional en vivo. DEBE ser instantáneo
+    (depositar y volver): si bloquea, parec se atasca y se pierde audio.
+    `pausado` (threading.Event opcional): botón de apagado. Mientras esté set,
+    los frames se descartan aquí mismo: cero Whisper, cero traducción, cero API.
+    Seguimos leyendo de parec para que el pipe no se llene ni muera el proceso.
     """
     import time
     monitor = monitor or monitor_source()
     seg = Segmenter()
+    paso = max(1, parcial_ms // FRAME_MS)  # frames de habla entre snapshots
+    ult = 0                                # tamaño del buf en el último snapshot
     while True:
         proc = subprocess.Popen(record_command(monitor), stdout=subprocess.PIPE)
         try:
@@ -88,13 +96,22 @@ def utterances(monitor=None, cortar=None):
                 frame = proc.stdout.read(FRAME_BYTES)
                 if len(frame) < FRAME_BYTES:
                     break  # parec murió: salimos a relanzarlo
+                if pausado is not None and pausado.is_set():
+                    seg.buf, seg.silence, seg.in_speech, ult = [], 0, False, 0
+                    continue
                 out = seg.feed(frame)
                 if out is not None:
                     yield out
+                if not seg.in_speech:  # cubre cierre por silencio, por max_ms y descarte
+                    ult = 0
+                elif parcial and len(seg.buf) - ult >= paso:
+                    ult = len(seg.buf)
+                    parcial(b"".join(seg.buf))
                 if cortar is not None and cortar.is_set():
                     cortar.clear()
                     forced = seg.flush()
                     if forced is not None:
+                        ult = 0
                         yield forced
         finally:
             proc.terminate()
