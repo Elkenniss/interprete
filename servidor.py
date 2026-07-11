@@ -27,6 +27,16 @@ async def broadcast(iv: dict):
         msg = json.dumps(iv, ensure_ascii=False)
         await asyncio.gather(*(c.send(msg) for c in list(CLIENTS)), return_exceptions=True)
 
+async def enviar_uso(ws):
+    # Consumo por API al conectar: sin esto, tras un F5 el panel de Ajustes quedaba
+    # "sin datos" hasta el siguiente broadcast (cada 20 frases). En executor: son
+    # hasta 3 llamadas de red y no deben congelar el saludo del ws.
+    uso = await asyncio.get_running_loop().run_in_executor(None, motor.deepl_usage)
+    try:
+        await ws.send(json.dumps({"tipo": "uso", **uso}))
+    except Exception:
+        pass
+
 async def retraducir(ws, d):
     # Reintento manual (botón ⚠ de una fila sin traducción). En task aparte: si se
     # hiciera await en el handler, bloquearía la tijera y el resto de botones.
@@ -44,6 +54,7 @@ async def handler(ws):
     try:
         await ws.send(json.dumps({"tipo": "motor", "modo": ESTADO["modo"]}))
         await ws.send(json.dumps({"tipo": "poder", "on": not PAUSADO.is_set()}))
+        asyncio.create_task(enviar_uso(ws))
         async for msg in ws:  # el cliente pide la pronunciación de una palabra al hacer clic
             try:
                 d = json.loads(msg)
