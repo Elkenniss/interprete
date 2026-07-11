@@ -4,6 +4,11 @@ def test_deepl_keys_lista(monkeypatch):
     monkeypatch.setenv("DEEPL_API_KEYS", "k1, k2 ,,k3")
     assert motor._deepl_keys() == ["k1", "k2", "k3"]
 
+def test_deepl_cuentas_con_nombres(monkeypatch):
+    monkeypatch.setenv("DEEPL_API_KEYS", "Kenny=k1:fx, lewevog=k2:fx ,k3:fx")
+    assert motor._deepl_cuentas() == [("Kenny", "k1:fx"), ("lewevog", "k2:fx"), ("API 3", "k3:fx")]
+    assert motor._deepl_keys() == ["k1:fx", "k2:fx", "k3:fx"]
+
 def test_deepl_keys_una_sola(monkeypatch):
     # DEEPL_API_KEY (singular) sigue funcionando si no hay lista
     monkeypatch.delenv("DEEPL_API_KEYS", raising=False)

@@ -17,11 +17,19 @@ def log(*args):
     # Con hora: sin ella no se puede cruzar un fallo con la fila que quedó sin traducir.
     print(time.strftime("%H:%M:%S"), *args, flush=True)
 
-def _deepl_keys() -> list[str]:
-    # Varias cuentas DeepL en cascada (DEEPL_API_KEYS=key1,key2,...): si una falla o
-    # agota cuota, la siguiente responde. DEEPL_API_KEY sola sigue funcionando.
+def _deepl_cuentas() -> list[tuple[str, str]]:
+    # Varias cuentas DeepL en cascada (DEEPL_API_KEYS=nombre=key,nombre=key,...): si una
+    # falla o agota cuota, la siguiente responde. También vale sin nombre, y
+    # DEEPL_API_KEY (singular) sigue funcionando.
     raw = os.environ.get("DEEPL_API_KEYS") or os.environ.get("DEEPL_API_KEY", "")
-    return [k.strip() for k in raw.split(",") if k.strip()]
+    out = []
+    for i, parte in enumerate(p.strip() for p in raw.split(",") if p.strip()):
+        nombre, _, key = parte.rpartition("=")
+        out.append((nombre.strip() or f"API {i + 1}", key.strip()))
+    return out
+
+def _deepl_keys() -> list[str]:
+    return [k for _, k in _deepl_cuentas()]
 
 def load_estilo() -> str:
     global _ESTILO
@@ -85,7 +93,7 @@ def deepl_translate(original: str, direction: str) -> dict:
         data = {"text": original, "target_lang": "ES", "source_lang": "EN",
                 "formality": "prefer_more"}
     body = urllib.parse.urlencode(data).encode("utf-8")
-    for key in _deepl_keys():
+    for nombre, key in _deepl_cuentas():
         try:
             req = urllib.request.Request("https://api-free.deepl.com/v2/translate", data=body,
                 headers={"Authorization": "DeepL-Auth-Key " + key})
@@ -93,7 +101,7 @@ def deepl_translate(original: str, direction: str) -> dict:
                 d = json.loads(r.read())
             return {"traduccion": d["translations"][0]["text"], "resaltados": []}
         except Exception as e:
-            log(f"[deepl] key {key[:8]}… falló:", e)
+            log(f"[deepl] {nombre} falló:", e)
     return {"traduccion": "", "resaltados": []}
 
 # Números/horas/fechas numéricas en el texto: Whisper ya convierte los dígitos
@@ -163,19 +171,22 @@ def translate(original: str, direction: str) -> dict:
 
 def deepl_usage() -> dict:
     # Caracteres consumidos/límite del mes en DeepL, para saber en vivo si damos abasto.
-    # Con varias keys se suman: el medidor muestra el total disponible entre todas.
-    count = limit = 0
-    for key in _deepl_keys():
+    # El medidor del header suma todas las cuentas; "cuentas" trae el detalle por API
+    # para el panel de Ajustes (limit=0 = esa key no respondió: inválida o sin red).
+    cuentas = []
+    for nombre, key in _deepl_cuentas():
         try:
             req = urllib.request.Request("https://api-free.deepl.com/v2/usage",
                 headers={"Authorization": "DeepL-Auth-Key " + key})
             with urllib.request.urlopen(req, timeout=10) as r:
                 d = json.loads(r.read())
-            count += d.get("character_count", 0)
-            limit += d.get("character_limit", 0)
-        except Exception:
-            pass
-    return {"count": count, "limit": limit}
+            cuentas.append({"nombre": nombre, "count": d.get("character_count", 0),
+                            "limit": d.get("character_limit", 0)})
+        except Exception as e:
+            log(f"[deepl] usage {nombre} falló:", e)
+            cuentas.append({"nombre": nombre, "count": 0, "limit": 0})
+    return {"count": sum(c["count"] for c in cuentas),
+            "limit": sum(c["limit"] for c in cuentas), "cuentas": cuentas}
 
 def lang_to_direction(lang: str) -> str:
     # El LEP habla español; Whisper rara vez confunde el inglés, pero confunde el

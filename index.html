@@ -63,6 +63,25 @@
   .drow b { display:inline-block; min-width:1.4em; color:#9cf; }
   .dn { color:#888; } .do { color:#fff; font-weight:600; } .dp { color:#7d7; }
   #del-out .vacio2 { color:#888; display:block; padding:8px 2px; }
+  .vacio2 { color:#888; }
+  /* ajustes: consumo por API DeepL */
+  #ajustes { display:none; position:fixed; right:16px; top:48px; width:340px; background:#1a1a1a; border:1px solid #555; border-radius:10px; flex-direction:column; z-index:9; box-shadow:0 4px 20px rgba(0,0,0,.5); }
+  #ajustes .nh { display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:#000; border-radius:10px 10px 0 0; cursor:move; user-select:none; }
+  #ajustes .nh button { background:#222; color:#eee; border:1px solid #444; border-radius:6px; padding:2px 8px; cursor:pointer; }
+  .aj-body { padding:10px; overflow-y:auto; max-height:60vh; }
+  .aj-body h3 { margin:0 0 10px; font-size:13px; color:#bbb; font-weight:600; }
+  .aj-api { margin-bottom:12px; font-size:13px; }
+  .aj-api .bar { height:8px; background:#333; border-radius:4px; overflow:hidden; margin:4px 0 2px; }
+  .aj-api .bar i { display:block; height:100%; }
+  .aj-nums { color:#999; font-size:12px; }
+  .aj-tope { color:#f66; font-size:12px; font-weight:600; }
+  #alerta-api { display:none; color:#f66; font-weight:600; cursor:pointer; }
+  /* ayudas dentro de Notas (días/meses y números) */
+  .ayuda { display:none; overflow-y:auto; max-height:300px; border-bottom:1px solid #333; padding:6px 10px; }
+  .ayuda h4 { margin:6px 0 2px; font-size:12px; color:#9cf; text-transform:uppercase; letter-spacing:.5px; }
+  .ayuda .drow b { min-width:6.2em; }
+  #num-in { width:calc(100% - 20px); margin:0 0 6px; padding:6px 8px; background:#111; color:#eee; border:1px solid #444; border-radius:6px; font:14px system-ui,sans-serif; outline:none; box-sizing:border-box; }
+  #notas.grande { height:500px; }
 </style>
 </head>
 <body>
@@ -75,8 +94,10 @@
   <button onclick="abrirHist()" title="Ver conversaciones guardadas">🕘 Historial</button>
   <button onclick="toggleNotas()" title="Bloc de notas para apuntar nombres/datos">📝 Notas</button>
   <button onclick="toggleDeletreo()" title="Deletrear una palabra en alfabeto fonético (OTAN) para el representante">🔤 Deletrear</button>
+  <button onclick="toggleAjustes()" title="Consumo de cada API de DeepL">⚙ Ajustes</button>
   <span class="sp"></span>
-  <span id="cuota" title="Caracteres DeepL usados este mes"></span>
+  <span id="alerta-api" onclick="toggleAjustes()" title="Una API llegó a su límite — clic para ver el detalle"></span>
+  <span id="cuota" title="Caracteres DeepL usados este mes (todas las APIs sumadas)"></span>
   <span id="estado">conectando…</span>
 </header>
 <div class="grid">
@@ -85,8 +106,18 @@
 </div>
 
 <div id="notas">
-  <div class="nh"><b>📝 Notas</b><span><button onclick="borrarNotas()">🗑 Borrar</button> <button onclick="toggleNotas()">✕</button></span></div>
+  <div class="nh"><b>📝 Notas</b><span><button onclick="toggleAyuda('dias')" title="Días y meses en inglés, con traducción y pronunciación">📅</button> <button onclick="toggleAyuda('nums')" title="Cómo se dice y pronuncia un número en inglés">🔢</button> <button onclick="borrarNotas()">🗑 Borrar</button> <button onclick="toggleNotas()">✕</button></span></div>
+  <div id="ayuda-dias" class="ayuda"></div>
+  <div id="ayuda-nums" class="ayuda">
+    <input id="num-in" placeholder="Número: 1985, 2500000, 916-680-4101…" oninput="verNumero()" autocomplete="off" spellcheck="false">
+    <div id="num-out"></div>
+  </div>
   <textarea id="notas-txt" placeholder="Apunta aquí nombres y datos para corroborar…"></textarea>
+</div>
+
+<div id="ajustes">
+  <div class="nh"><b>⚙ Ajustes</b><span><button onclick="toggleAjustes()">✕</button></span></div>
+  <div class="aj-body"><h3>Consumo DeepL por API (mes)</h3><div id="aj-apis"><span class="vacio2">Sin datos aún — llegan al conectar…</span></div></div>
 </div>
 
 <div id="deletreo">
@@ -207,6 +238,29 @@ function verUso(u){
   const pct = Math.round(u.count / u.limit * 100);
   cuota.textContent = `DeepL ${u.count.toLocaleString()}/${u.limit.toLocaleString()} (${pct}%)`;
   cuota.style.color = pct >= 90 ? "#f66" : pct >= 70 ? "#fc6" : "#6c6";
+  verApis(u.cuentas || []);
+}
+// --- ajustes: consumo por API DeepL + alerta si alguna llegó a su límite ---
+const alertaApi = document.getElementById("alerta-api");
+const ajApis = document.getElementById("aj-apis");
+function verApis(cuentas){
+  if(cuentas.length){
+    ajApis.innerHTML = cuentas.map(c => {
+      if(!c.limit) return `<div class="aj-api"><b>${c.nombre}</b> — <span class="aj-tope">sin datos (¿key inválida o sin red?)</span></div>`;
+      const pct = Math.min(100, Math.round(c.count / c.limit * 100));
+      const color = pct >= 90 ? "#f66" : pct >= 70 ? "#fc6" : "#6c6";
+      const tope = c.count >= c.limit ? ` <span class="aj-tope">⛔ AL LÍMITE — no se usará hasta que recargue</span>` : "";
+      return `<div class="aj-api"><b>${c.nombre}</b>${tope}<div class="bar"><i style="width:${pct}%;background:${color}"></i></div>`
+           + `<span class="aj-nums">${c.count.toLocaleString()} / ${c.limit.toLocaleString()} (${pct}%)</span></div>`;
+    }).join("");
+  }
+  const tope = cuentas.filter(c => c.limit && c.count >= c.limit);
+  alertaApi.style.display = tope.length ? "inline" : "none";
+  alertaApi.textContent = tope.length ? `⚠ ${tope.map(c => c.nombre).join(", ")} al límite` : "";
+}
+function toggleAjustes(){
+  const a = document.getElementById("ajustes");
+  a.style.display = a.style.display === "flex" ? "none" : "flex";
 }
 
 // --- historial (todo en localStorage; el visor es solo lectura) ---
@@ -316,6 +370,92 @@ function hacerMovible(win, clave){
 }
 hacerMovible(notas, "interprete_notas_pos");
 hacerMovible(document.getElementById("deletreo"), "interprete_deletreo_pos");
+hacerMovible(document.getElementById("ajustes"), "interprete_ajustes_pos");
+
+// --- ayudas en Notas: días/meses en inglés y números hablados, con pronunciación
+// a la española (local, 0 tokens). Solo una ayuda abierta a la vez.
+const DIAS = [["Monday","lunes","MÁN-dei"],["Tuesday","martes","TIÚS-dei"],
+  ["Wednesday","miércoles","UÉNS-dei"],["Thursday","jueves","ZÉRS-dei"],
+  ["Friday","viernes","FRÁI-dei"],["Saturday","sábado","SÁ-ter-dei"],
+  ["Sunday","domingo","SÁN-dei"]];
+const MESES = [["January","enero","YÁ-niu-e-ri"],["February","febrero","FÉ-briu-e-ri"],
+  ["March","marzo","march"],["April","abril","ÉI-pril"],["May","mayo","méi"],
+  ["June","junio","yun"],["July","julio","yu-LÁI"],["August","agosto","Ó-gost"],
+  ["September","septiembre","sep-TÉM-ber"],["October","octubre","ok-TÓU-ber"],
+  ["November","noviembre","no-VÉM-ber"],["December","diciembre","di-SÉM-ber"]];
+function filasDias(lista){
+  return lista.map(([en, es, pron]) =>
+    `<div class="drow"><b>${en}</b> <span class="do">${es}</span> <span class="dp">(${pron})</span></div>`).join("");
+}
+document.getElementById("ayuda-dias").innerHTML =
+  `<h4>Días</h4>${filasDias(DIAS)}<h4>Meses</h4>${filasDias(MESES)}`;
+function toggleAyuda(cual){
+  const el = document.getElementById("ayuda-" + cual), abrir = el.style.display !== "block";
+  document.querySelectorAll(".ayuda").forEach(a => a.style.display = "none");
+  if(abrir) el.style.display = "block";
+  notas.classList.toggle("grande", abrir);
+  if(abrir && cual === "nums"){ verNumero(); numIn.focus(); }
+}
+
+// --- números → inglés hablado. Vocabulario cerrado: la pronunciación sale de tabla.
+const UNIDADES = ["zero","one","two","three","four","five","six","seven","eight","nine",
+  "ten","eleven","twelve","thirteen","fourteen","fifteen","sixteen","seventeen",
+  "eighteen","nineteen"];
+const DECENAS = ["","","twenty","thirty","forty","fifty","sixty","seventy","eighty","ninety"];
+const PRON_NUM = { zero:"SÍ-rou", one:"uán", two:"tu", three:"zrí", four:"fóar", five:"fáiv",
+  six:"siks", seven:"SÉ-ven", eight:"éit", nine:"náin", ten:"ten", eleven:"i-LÉ-ven",
+  twelve:"tuélv", thirteen:"zir-TÍN", fourteen:"for-TÍN", fifteen:"fif-TÍN",
+  sixteen:"siks-TÍN", seventeen:"se-ven-TÍN", eighteen:"ei-TÍN", nineteen:"nain-TÍN",
+  twenty:"TUÉN-ti", thirty:"ZÉR-ti", forty:"FÓR-ti", fifty:"FÍF-ti", sixty:"SÍKS-ti",
+  seventy:"SÉ-ven-ti", eighty:"ÉI-ti", ninety:"NÁIN-ti", hundred:"JÁN-dred",
+  thousand:"ZÁU-send", million:"MÍ-lion", billion:"BÍ-lion", oh:"óu", point:"póint" };
+function centenas(n){  // 0-999 → palabras
+  const out = [];
+  if(n >= 100){ out.push(UNIDADES[Math.floor(n / 100)], "hundred"); n %= 100; }
+  if(n >= 20){ out.push(DECENAS[Math.floor(n / 10)]); n %= 10; }
+  if(n > 0) out.push(UNIDADES[n]);
+  return out;
+}
+function enPalabras(n){
+  if(n === 0) return ["zero"];
+  let out = [];
+  for(const [v, nombre] of [[1e9,"billion"],[1e6,"million"],[1e3,"thousand"],[1,""]]){
+    if(n >= v){ out = out.concat(centenas(Math.floor(n / v))); if(nombre) out.push(nombre); n %= v; }
+  }
+  return out;
+}
+function comoAnio(n){  // lectura de año: 1985 → nineteen eighty-five; 2026 → twenty twenty-six
+  if(n < 1100 || n > 2999 || (n >= 2000 && n < 2010)) return null;  // 2005 se lee normal
+  const b = n % 100;
+  return centenas(Math.floor(n / 100)).concat(
+    b === 0 ? ["hundred"] : b < 10 ? ["oh", UNIDADES[b]] : centenas(b));
+}
+const numIn = document.getElementById("num-in");
+const numOut = document.getElementById("num-out");
+function filaNum(titulo, ws){
+  return `<div class="drow"><span class="dn">${titulo}:</span> <span class="do">${ws.join(" ")}</span>`
+       + `<br><span class="dp">(${ws.map(w => PRON_NUM[w] || w).join(" ")})</span></div>`;
+}
+function verNumero(){
+  const raw = numIn.value.trim(), out = [];
+  const limpio = raw.replace(/[,\s]/g, "");
+  if(/^\d+(\.\d+)?$/.test(limpio)){
+    const [ent, dec] = limpio.split(".");
+    const n = parseInt(ent, 10);
+    if(n <= 999999999999){
+      let ws = enPalabras(n);
+      if(dec) ws = ws.concat(["point"], [...dec].map(d => UNIDADES[+d]));
+      out.push(filaNum("Se dice", ws));
+      const anio = comoAnio(n);
+      if(anio && !dec) out.push(filaNum("Como año/fecha", anio));
+      if(!dec && ent.length >= 7)  // teléfonos/SSN sin guiones: también dígito a dígito
+        out.push(filaNum("Dígito a dígito", [...ent].map(d => UNIDADES[+d])));
+    }
+  } else if(/^[\d\s().+-]+$/.test(raw) && /\d/.test(raw)){  // 916-680-4101 y similares
+    out.push(filaNum("Dígito a dígito", [...raw].filter(c => /\d/.test(c)).map(d => UNIDADES[+d])));
+  }
+  numOut.innerHTML = out.length ? out.join("") : "<span class='vacio2'>Escribe un número…</span>";
+}
 // --- deletreo: alfabeto fonético OTAN (letra → nombre inglés → palabra → pronunciación es) ---
 const ALFA = {
   A:["Ei","Alpha","Ál-fa"], B:["Bi","Bravo","Brá-vo"], C:["Si","Charlie","Chár-li"],
