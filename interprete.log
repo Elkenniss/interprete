@@ -1,0 +1,7 @@
+=== sesión 2026-07-11 12:09:36 ===
+WebSocket en ws://localhost:8765 — habla la llamada…
+write() failed: Tubería rota
+/usr/lib/python3.14/multiprocessing/resource_tracker.py:475: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown: {'/mp-uqy9fbps'}
+  warnings.warn(
+=== sesión 2026-07-11 12:11:58 ===
+WebSocket en ws://localhost:8765 — habla la llamada…

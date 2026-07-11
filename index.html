@@ -80,7 +80,10 @@
   .ayuda { display:none; overflow-y:auto; max-height:300px; border-bottom:1px solid #333; padding:6px 10px; }
   .ayuda h4 { margin:6px 0 2px; font-size:12px; color:#9cf; text-transform:uppercase; letter-spacing:.5px; }
   .ayuda .drow b { min-width:6.2em; }
-  #num-in { width:calc(100% - 20px); margin:0 0 6px; padding:6px 8px; background:#111; color:#eee; border:1px solid #444; border-radius:6px; font:14px system-ui,sans-serif; outline:none; box-sizing:border-box; }
+  #num-in, #tiempo-in { width:calc(100% - 20px); margin:0 0 6px; padding:6px 8px; background:#111; color:#eee; border:1px solid #444; border-radius:6px; font:14px system-ui,sans-serif; outline:none; box-sizing:border-box; }
+  .trow { display:flex; justify-content:space-between; align-items:center; gap:6px; padding:4px 2px; border-bottom:1px solid #222; font-size:13px; }
+  .trow .tf { color:#888; font-size:11px; white-space:nowrap; }
+  .trow button { background:#222; color:#eee; border:1px solid #444; border-radius:6px; padding:1px 6px; cursor:pointer; }
   #notas.grande { height:500px; }
 </style>
 </head>
@@ -106,7 +109,11 @@
 </div>
 
 <div id="notas">
-  <div class="nh"><b>📝 Notas</b><span><button onclick="toggleAyuda('dias')" title="Días y meses en inglés, con traducción y pronunciación">📅</button> <button onclick="toggleAyuda('nums')" title="Cómo se dice y pronuncia un número en inglés">🔢</button> <button onclick="borrarNotas()">🗑 Borrar</button> <button onclick="toggleNotas()">✕</button></span></div>
+  <div class="nh"><b>📝 Notas</b><span><button onclick="toggleAyuda('tiempos')" title="Registro de tiempos en llamada">⏱</button> <button onclick="toggleAyuda('dias')" title="Días y meses en inglés, con traducción y pronunciación">📅</button> <button onclick="toggleAyuda('nums')" title="Cómo se dice y pronuncia un número en inglés">🔢</button> <button onclick="borrarNotas()">🗑 Borrar</button> <button onclick="toggleNotas()">✕</button></span></div>
+  <div id="ayuda-tiempos" class="ayuda">
+    <input id="tiempo-in" placeholder="Ej: 23 min llamada clínica — Enter guarda" autocomplete="off" spellcheck="false">
+    <div id="tiempo-out"></div>
+  </div>
   <div id="ayuda-dias" class="ayuda"></div>
   <div id="ayuda-nums" class="ayuda">
     <input id="num-in" placeholder="Número: 1985, 2500000, 916-680-4101…" oninput="verNumero()" autocomplete="off" spellcheck="false">
@@ -395,7 +402,36 @@ function toggleAyuda(cual){
   if(abrir) el.style.display = "block";
   notas.classList.toggle("grande", abrir);
   if(abrir && cual === "nums"){ verNumero(); numIn.focus(); }
+  if(abrir && cual === "tiempos"){ verTiempos(); tiempoIn.focus(); }
 }
+
+// --- registro de tiempos en llamada (⏱): entradas manuales con fecha/hora
+// automáticas, persistidas en localStorage; cada una se borra con su 🗑.
+const TIEMPOS_KEY = "interprete_tiempos";
+const tiempoIn = document.getElementById("tiempo-in");
+const tiempoOut = document.getElementById("tiempo-out");
+function cargarTiempos(){ try { return JSON.parse(localStorage.getItem(TIEMPOS_KEY)) || []; } catch { return []; } }
+function esc(s){ return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+function verTiempos(){
+  const ts = cargarTiempos();
+  tiempoOut.innerHTML = ts.length
+    ? ts.map(t => `<div class="trow"><span>📞 ${esc(t.texto)}</span>`
+        + `<span class="tf">${t.fecha}</span><button onclick="borrarTiempo(${t.id})" title="Borrar esta entrada">🗑</button></div>`).join("")
+    : "<span class='vacio2'>Sin tiempos aún — escribe arriba y Enter…</span>";
+}
+function borrarTiempo(id){
+  localStorage.setItem(TIEMPOS_KEY, JSON.stringify(cargarTiempos().filter(t => t.id !== id)));
+  verTiempos();
+}
+tiempoIn.addEventListener("keydown", e => {
+  if(e.key !== "Enter" || !tiempoIn.value.trim()) return;
+  const ts = cargarTiempos();
+  ts.unshift({ id: Date.now(), texto: tiempoIn.value.trim(),
+               fecha: new Date().toLocaleString("es", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" }) });
+  localStorage.setItem(TIEMPOS_KEY, JSON.stringify(ts));
+  tiempoIn.value = "";
+  verTiempos();
+});
 
 // --- números → inglés hablado. Vocabulario cerrado: la pronunciación sale de tabla.
 const UNIDADES = ["zero","one","two","three","four","five","six","seven","eight","nine",
