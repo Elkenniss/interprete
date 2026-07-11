@@ -2,3 +2,4 @@ faster-whisper
 websockets
 cmudict
 pytest
+sentencepiece==0.2.1
