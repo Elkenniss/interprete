@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import threading
+import time
 import websockets
 
 import captura
@@ -26,6 +27,26 @@ async def broadcast(iv: dict):
     if CLIENTS:
         msg = json.dumps(iv, ensure_ascii=False)
         await asyncio.gather(*(c.send(msg) for c in list(CLIENTS)), return_exceptions=True)
+
+# Hilo de la idea (regla de Kenny): frases seguidas del MISMO idioma continúan la misma
+# idea — se re-traduce el hilo completo y la fila anterior se actualiza conectada. Habla
+# el otro idioma, pasa mucho rato o el hilo ya es muy largo → idea nueva.
+HILO = {"lang": None, "texto": "", "hora": "", "t": 0.0}
+HILO_MAX = 600      # chars que se re-traducen por continuación; más allá, fila nueva
+HILO_VENTANA = 45   # s sin frases del mismo idioma = idea nueva aunque nadie más hablara
+
+def hilo_decidir(lang, texto):
+    """Devuelve (texto_a_traducir, contexto, continuar) y actualiza HILO."""
+    ahora = time.monotonic()
+    mismo = lang == HILO["lang"] and HILO["texto"] and (ahora - HILO["t"]) < HILO_VENTANA
+    if mismo and len(HILO["texto"]) < HILO_MAX:
+        HILO["texto"] = HILO["texto"] + " " + texto
+        HILO["t"] = ahora
+        return HILO["texto"], "", True
+    # Hilo largo del mismo idioma: fila nueva, pero conectada vía context de DeepL.
+    contexto = HILO["texto"][-300:] if mismo else ""
+    HILO.update(lang=lang, texto=texto, t=ahora)
+    return texto, contexto, False
 
 async def enviar_uso(ws):
     # Consumo por API al conectar: sin esto, tras un F5 el panel de Ajustes quedaba
@@ -141,9 +162,18 @@ def pipeline(loop):
             PARCIAL["pcm"] = None
             with MODEL_LOCK:
                 texto, lang = motor.transcribe(pcm, ESTADO["model"])
-            iv = motor.process_text(lang, texto)
+            iv = None
+            if texto.strip():
+                a_traducir, ctx, continuar = hilo_decidir(lang, texto.strip())
+                iv = motor.process_text(lang, a_traducir,
+                        translate_fn=lambda o, d: motor.translate(o, d, contexto=ctx))
             send(loop, {"tipo": "parcial_fin"})  # borra el caption provisional
             if iv:
+                if continuar:
+                    iv["hora"] = HILO["hora"]  # la fila conserva la hora en que empezó la idea
+                else:
+                    HILO["hora"] = iv["hora"]
+                iv["continuar"] = continuar
                 send(loop, iv)
                 n += 1
                 if n % 20 == 0:  # refresca el medidor de cuota cada ~20 frases

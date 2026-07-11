@@ -38,10 +38,12 @@ def load_estilo() -> str:
         _ESTILO = Path(__file__).with_name("estilo_glosario.md").read_text(encoding="utf-8")
     return _ESTILO
 
-def build_prompt(original: str, direction: str) -> str:
+def build_prompt(original: str, direction: str, contexto: str = "") -> str:
     destino = "inglés (English)" if direction == "es2en" else "español"
+    ctx = (f'Contexto de lo dicho justo antes (solo referencia, NO lo traduzcas): "{contexto}"\n'
+           if contexto else "")
     return (
-        f"{load_estilo()}\n\n"
+        f"{load_estilo()}\n\n{ctx}"
         f"Traduce el siguiente texto al {destino}, aplicando TODAS las reglas de arriba.\n"
         f"Texto:\n\"\"\"\n{original}\n\"\"\"\n\n"
         "Responde SOLO con JSON válido, sin texto extra, con esta forma exacta:\n"
@@ -65,13 +67,13 @@ def parse_response(raw: str) -> dict:
             return {"traduccion": "", "resaltados": []}
     return {"traduccion": str(d.get("traduccion", "")), "resaltados": d.get("resaltados", []) or []}
 
-def gemini_translate(original: str, direction: str) -> dict:
+def gemini_translate(original: str, direction: str, contexto: str = "") -> dict:
     try:
         key = os.environ["GEMINI_API_KEY"]
         url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
                f"{GEMINI_MODEL}:generateContent?key={key}")
         body = json.dumps({
-            "contents": [{"parts": [{"text": build_prompt(original, direction)}]}],
+            "contents": [{"parts": [{"text": build_prompt(original, direction, contexto)}]}],
             "generationConfig": {"temperature": 0.2, "response_mime_type": "application/json"},
         }).encode("utf-8")
         req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
@@ -85,7 +87,7 @@ def gemini_translate(original: str, direction: str) -> dict:
 
 _KEY_429 = {}  # key -> time.monotonic() hasta el que se salta (throttle por IP de DeepL)
 
-def deepl_translate(original: str, direction: str, solo_primera=False) -> dict:
+def deepl_translate(original: str, direction: str, solo_primera=False, contexto="") -> dict:
     # DeepL traduce plano (sin resaltados), pero aguanta el volumen de una llamada
     # real sin el rate limit del free tier de Gemini. formality=prefer_more da "usted".
     # timeout corto: lo normal es <1.5s; con varias keys en cascada, esperar 15s por
@@ -95,6 +97,10 @@ def deepl_translate(original: str, direction: str, solo_primera=False) -> dict:
     else:
         data = {"text": original, "target_lang": "ES", "source_lang": "EN",
                 "formality": "prefer_more"}
+    if contexto:
+        # "context": lo dicho antes por el mismo hablante; DeepL lo usa para conectar
+        # la traducción del fragmento sin traducirlo ni cobrarlo.
+        data["context"] = contexto
     body = urllib.parse.urlencode(data).encode("utf-8")
     cuentas = _deepl_cuentas()
     if solo_primera:
@@ -206,7 +212,7 @@ def local_translate(original: str, direction: str) -> dict:
         log("[local] falló:", e)
         return {"traduccion": "", "resaltados": []}
 
-def translate(original: str, direction: str, parcial=False) -> dict:
+def translate(original: str, direction: str, parcial=False, contexto="") -> dict:
     # Primario por env (TRADUCTOR), con fallback automático al otro: si el primario
     # falla o agota cuota devuelve traducción vacía, y saltamos al secundario para
     # no quedarnos mudos a mitad de llamada.
@@ -222,7 +228,8 @@ def translate(original: str, direction: str, parcial=False) -> dict:
         if res["traduccion"].strip() and not res["resaltados"]:
             res["resaltados"] = resaltados_locales(res["traduccion"])
         return res
-    funcs = {"deepl": deepl_translate, "gemini": gemini_translate}
+    funcs = {"deepl": lambda o, d: deepl_translate(o, d, contexto=contexto),
+             "gemini": lambda o, d: gemini_translate(o, d, contexto=contexto)}
     primario = os.environ.get("TRADUCTOR", "deepl")
     # Finales: primario → local (instantáneo, cubre 429 y hasta caída de internet) →
     # el otro remoto como último recurso (Gemini free: 20/día, casi nunca disponible).

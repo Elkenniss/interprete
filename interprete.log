@@ -74,3 +74,16 @@ WebSocket en ws://localhost:8765 — habla la llamada…
 12:34:08 [deepl] pijosot falló: HTTP Error 429: Too Many Requests
 12:34:08 [gemini] falló: HTTP Error 429: Too Many Requests
 12:34:09 [gemini] falló: HTTP Error 429: Too Many Requests
+write() failed: Tubería rota
+/usr/lib/python3.14/multiprocessing/resource_tracker.py:475: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown: {'/mp-enhd35zq'}
+  warnings.warn(
+=== sesión 2026-07-11 12:42:19 ===
+WebSocket en ws://localhost:8765 — habla la llamada…
+12:46:34 [deepl] Kenny falló: HTTP Error 429: Too Many Requests
+12:46:35 [deepl] lewevog falló: HTTP Error 429: Too Many Requests
+12:46:35 [deepl] pijosot falló: HTTP Error 429: Too Many Requests
+write() failed: Tubería rota
+/usr/lib/python3.14/multiprocessing/resource_tracker.py:475: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown: {'/mp-cqcbjzxc'}
+  warnings.warn(
+=== sesión 2026-07-11 12:59:12 ===
+WebSocket en ws://localhost:8765 — habla la llamada…

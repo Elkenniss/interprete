@@ -170,7 +170,7 @@ function rowHTML(iv, bandera, i){
   const cuerpo = (iv.traduccion || "").trim() ? tradHTML(iv)
       : i == null ? `<span class="sintrad">⚠ sin traducción</span>`
       : `<button class="retrad" onclick="reintentar(${i}, this)">⚠ reintentar traducción</button>`;
-  return `<div class="row"><div class="orig"><span class="hora">${h}</span><br>${iv.original}</div>`
+  return `<div class="row"${i == null ? "" : ` id="row-${i}"`}><div class="orig"><span class="hora">${h}</span><br>${iv.original}</div>`
        + `<div class="trad"${i == null ? "" : ` id="trad-${i}"`}>${cuerpo}</div></div>`;
 }
 function reintentar(i, btn){
@@ -232,12 +232,23 @@ function verParcial(m){
     + `<div class="trad">${m.traduccion || ultTradParcial || "…"}</div></div>`);
   feed.scrollTop = feed.scrollHeight;
 }
+let ultFila = { es: null, en: null };  // índice en sesion de la última fila final por idioma
 function add(iv){
   limpiarParciales(true);
-  sesion.push(iv);
   const feed = iv.idioma === "es" ? feedEs : feedEn;
-  feed.insertAdjacentHTML("beforeend", rowHTML(iv, false, sesion.length - 1));
-  feed.lastElementChild.classList.add("nuevo");
+  const prev = ultFila[iv.idioma];
+  // continuación de la misma idea: la fila anterior se reemplaza por el hilo completo
+  // re-traducido (así los fragmentos cortados por el silencio conectan bien).
+  if(iv.continuar && prev != null && document.getElementById("row-" + prev)){
+    sesion[prev] = iv;
+    document.getElementById("row-" + prev).outerHTML = rowHTML(iv, false, prev);
+    document.getElementById("row-" + prev).classList.add("nuevo");
+  } else {
+    sesion.push(iv);
+    ultFila[iv.idioma] = sesion.length - 1;
+    feed.insertAdjacentHTML("beforeend", rowHTML(iv, false, sesion.length - 1));
+    feed.lastElementChild.classList.add("nuevo");
+  }
   feed.scrollTop = feed.scrollHeight;
 }
 function verUso(u){
@@ -280,6 +291,7 @@ function limpiar(){
     guardar(h);
   }
   sesion = [];
+  ultFila = { es: null, en: null };
   feedEs.innerHTML = ""; feedEn.innerHTML = "";
 }
 function abrirHist(){ modal.style.display = "flex"; listaHist(); }
