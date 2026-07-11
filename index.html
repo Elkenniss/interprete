@@ -261,8 +261,14 @@ function borrarNotas(){
 // Hace movible una ventana flotante arrastrándola por su cabecera (.nh) y recuerda
 // su posición en localStorage. REGLA: toda ventana flotante nueva debe llamar a esto.
 function hacerMovible(win, clave){
+  // Restaurar solo posiciones numéricas y siempre dentro de la pantalla; una posición
+  // vacía o fuera de vista dejaba el panel "abierto" pero invisible.
   const pos = JSON.parse(localStorage.getItem(clave) || "null");
-  if(pos) Object.assign(win.style, pos);
+  const l = parseFloat(pos && pos.left), t = parseFloat(pos && pos.top);
+  if(!isNaN(l) && !isNaN(t)){
+    Object.assign(win.style, { left:Math.min(Math.max(l,0),innerWidth-80)+"px",
+                               top:Math.min(Math.max(t,0),innerHeight-40)+"px", right:"auto", bottom:"auto" });
+  }
   let d = null;
   win.querySelector(".nh").addEventListener("mousedown", e => {
     if(e.target.tagName === "BUTTON") return;  // los botones no arrastran
@@ -276,7 +282,8 @@ function hacerMovible(win, clave){
   document.addEventListener("mouseup", () => {
     if(!d) return;
     d = null;
-    localStorage.setItem(clave, JSON.stringify({ left:win.style.left, top:win.style.top, right:"auto", bottom:"auto" }));
+    // solo guardar si de verdad se arrastró; un click en la cabecera dejaba left/top vacíos
+    if(win.style.left) localStorage.setItem(clave, JSON.stringify({ left:win.style.left, top:win.style.top, right:"auto", bottom:"auto" }));
   });
 }
 hacerMovible(notas, "interprete_notas_pos");
