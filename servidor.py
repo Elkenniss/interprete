@@ -92,6 +92,8 @@ def dep_parcial(pcm):
 
 def parciales(loop):
     """Hilo del caption provisional: transcribe y traduce el snapshot más reciente."""
+    import time
+    ult_trad = 0.0
     while True:
         PARCIAL_EVT.wait()
         PARCIAL_EVT.clear()
@@ -108,8 +110,14 @@ def parciales(loop):
                 if gen == PARCIAL["gen"]:
                     send(loop, {"tipo": "parcial", "idioma": idioma,
                                 "original": texto, "traduccion": ""})
-                res = motor.translate(texto, motor.lang_to_direction(lang))
-                if gen == PARCIAL["gen"]:  # la frase no se cerró mientras traducíamos
+                # Traducción del caption como máximo cada 1.5s: retraducir el texto
+                # creciente cada snapshot gastaba ~5-7x los chars de la frase y el
+                # rate disparaba el 429 por IP de DeepL. El original sí va siempre.
+                if time.monotonic() - ult_trad < 1.5:
+                    continue
+                ult_trad = time.monotonic()
+                res = motor.translate(texto, motor.lang_to_direction(lang), parcial=True)
+                if res["traduccion"] and gen == PARCIAL["gen"]:  # la frase sigue abierta
                     send(loop, {"tipo": "parcial", "idioma": idioma,
                                 "original": texto, "traduccion": res["traduccion"]})
         except Exception as e:

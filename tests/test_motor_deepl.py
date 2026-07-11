@@ -35,3 +35,38 @@ def test_deepl_translate_todas_fallan(monkeypatch):
         raise OSError("todo caído")
     monkeypatch.setattr(motor.urllib.request, "urlopen", fake_urlopen)
     assert motor.deepl_translate("hello", "en2es") == {"traduccion": "", "resaltados": []}
+
+def _urlopen_contador(llamadas, excepcion):
+    def fake(req, timeout=None):
+        llamadas.append(req.headers["Authorization"])
+        raise excepcion
+    return fake
+
+def test_solo_primera_no_cascadea(monkeypatch):
+    monkeypatch.setenv("DEEPL_API_KEYS", "k1,k2,k3")
+    monkeypatch.setattr(motor, "_KEY_429", {})
+    llamadas = []
+    monkeypatch.setattr(motor.urllib.request, "urlopen", _urlopen_contador(llamadas, OSError("x")))
+    motor.deepl_translate("hello", "en2es", solo_primera=True)
+    assert len(llamadas) == 1 and "k1" in llamadas[0]
+
+def test_breaker_429_salta_la_key(monkeypatch):
+    import io, urllib.error
+    monkeypatch.setenv("DEEPL_API_KEYS", "k1")
+    monkeypatch.setattr(motor, "_KEY_429", {})
+    e429 = urllib.error.HTTPError("u", 429, "Too Many Requests", {}, io.BytesIO())
+    llamadas = []
+    monkeypatch.setattr(motor.urllib.request, "urlopen", _urlopen_contador(llamadas, e429))
+    motor.deepl_translate("hello", "en2es")   # 1ª: pide y recibe 429
+    motor.deepl_translate("hello", "en2es")   # 2ª: la key descansa, NO pide
+    assert len(llamadas) == 1
+
+def test_translate_parcial_no_usa_gemini(monkeypatch):
+    monkeypatch.setenv("DEEPL_API_KEYS", "k1,k2")
+    monkeypatch.setattr(motor, "_KEY_429", {})
+    monkeypatch.setattr(motor, "deepl_translate",
+                        lambda o, d, solo_primera=False: {"traduccion": "", "resaltados": []})
+    def gemini_prohibido(o, d):
+        raise AssertionError("parcial no debe llamar a Gemini")
+    monkeypatch.setattr(motor, "gemini_translate", gemini_prohibido)
+    assert motor.translate("hello", "en2es", parcial=True)["traduccion"] == ""

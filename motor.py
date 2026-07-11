@@ -2,6 +2,7 @@ import json
 import os
 import re
 import time
+import urllib.error
 import urllib.request
 import urllib.parse
 from pathlib import Path
@@ -82,7 +83,9 @@ def gemini_translate(original: str, direction: str) -> dict:
         log("[gemini] falló:", e)
         return {"traduccion": "", "resaltados": []}
 
-def deepl_translate(original: str, direction: str) -> dict:
+_KEY_429 = {}  # key -> time.monotonic() hasta el que se salta (throttle por IP de DeepL)
+
+def deepl_translate(original: str, direction: str, solo_primera=False) -> dict:
     # DeepL traduce plano (sin resaltados), pero aguanta el volumen de una llamada
     # real sin el rate limit del free tier de Gemini. formality=prefer_more da "usted".
     # timeout corto: lo normal es <1.5s; con varias keys en cascada, esperar 15s por
@@ -93,7 +96,15 @@ def deepl_translate(original: str, direction: str) -> dict:
         data = {"text": original, "target_lang": "ES", "source_lang": "EN",
                 "formality": "prefer_more"}
     body = urllib.parse.urlencode(data).encode("utf-8")
-    for nombre, key in _deepl_cuentas():
+    cuentas = _deepl_cuentas()
+    if solo_primera:
+        cuentas = cuentas[:1]
+    for nombre, key in cuentas:
+        # Breaker anti-429: DeepL free throttlea por IP (visto 2026-07-11: las 3 cuentas
+        # dieron 429 a la vez). Tras un 429 la key descansa 10s en vez de martillar,
+        # que solo alarga el bloqueo. Sin esperas: se salta y sigue la siguiente.
+        if time.monotonic() < _KEY_429.get(key, 0.0):
+            continue
         try:
             req = urllib.request.Request("https://api-free.deepl.com/v2/translate", data=body,
                 headers={"Authorization": "DeepL-Auth-Key " + key})
@@ -101,6 +112,8 @@ def deepl_translate(original: str, direction: str) -> dict:
                 d = json.loads(r.read())
             return {"traduccion": d["translations"][0]["text"], "resaltados": []}
         except Exception as e:
+            if isinstance(e, urllib.error.HTTPError) and e.code == 429:
+                _KEY_429[key] = time.monotonic() + 10
             log(f"[deepl] {nombre} falló:", e)
     return {"traduccion": "", "resaltados": []}
 
@@ -153,10 +166,19 @@ def pronunciacion_es(palabra: str) -> str:
             out.append(_CONS_ARPA.get(base, ""))
     return "".join(out)
 
-def translate(original: str, direction: str) -> dict:
+def translate(original: str, direction: str, parcial=False) -> dict:
     # Primario por env (TRADUCTOR), con fallback automático al otro: si el primario
     # falla o agota cuota devuelve traducción vacía, y saltamos al secundario para
     # no quedarnos mudos a mitad de llamada.
+    if parcial:
+        # Caption provisional: UN solo intento con la key primaria, sin cascada ni
+        # Gemini. Bajo throttle por IP, la cascada cuadruplicaba las peticiones y
+        # alimentaba el propio 429; un caption sin traducir es barato (la frase
+        # final sí lleva cascada completa) y Gemini (20/día) se reserva para finales.
+        res = deepl_translate(original, direction, solo_primera=True)
+        if res["traduccion"].strip() and not res["resaltados"]:
+            res["resaltados"] = resaltados_locales(res["traduccion"])
+        return res
     funcs = {"deepl": deepl_translate, "gemini": gemini_translate}
     primario = os.environ.get("TRADUCTOR", "deepl")
     orden = [primario] + [t for t in funcs if t != primario]

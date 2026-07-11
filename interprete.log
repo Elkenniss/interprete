@@ -5,3 +5,57 @@ write() failed: Tubería rota
   warnings.warn(
 === sesión 2026-07-11 12:11:58 ===
 WebSocket en ws://localhost:8765 — habla la llamada…
+12:20:43 [deepl] Kenny falló: HTTP Error 429: Too Many Requests
+12:20:43 [deepl] lewevog falló: HTTP Error 429: Too Many Requests
+12:20:44 [deepl] pijosot falló: HTTP Error 429: Too Many Requests
+12:20:44 [gemini] falló: HTTP Error 429: Too Many Requests
+12:20:48 [deepl] Kenny falló: HTTP Error 429: Too Many Requests
+12:20:49 [deepl] lewevog falló: HTTP Error 429: Too Many Requests
+12:20:49 [deepl] pijosot falló: HTTP Error 429: Too Many Requests
+12:20:50 [gemini] falló: HTTP Error 429: Too Many Requests
+12:21:04 [deepl] Kenny falló: HTTP Error 429: Too Many Requests
+12:21:05 [deepl] lewevog falló: HTTP Error 429: Too Many Requests
+12:21:06 [deepl] pijosot falló: HTTP Error 429: Too Many Requests
+12:21:06 [gemini] falló: HTTP Error 429: Too Many Requests
+12:21:06 [deepl] Kenny falló: HTTP Error 429: Too Many Requests
+12:21:07 [deepl] lewevog falló: HTTP Error 429: Too Many Requests
+12:21:07 [deepl] pijosot falló: HTTP Error 429: Too Many Requests
+12:21:07 [gemini] falló: HTTP Error 429: Too Many Requests
+12:21:24 [deepl] Kenny falló: HTTP Error 429: Too Many Requests
+12:21:24 [deepl] lewevog falló: HTTP Error 429: Too Many Requests
+12:21:25 [deepl] pijosot falló: HTTP Error 429: Too Many Requests
+12:21:25 [gemini] falló: HTTP Error 429: Too Many Requests
+12:21:26 [deepl] Kenny falló: HTTP Error 429: Too Many Requests
+12:21:26 [deepl] lewevog falló: HTTP Error 429: Too Many Requests
+12:21:27 [deepl] pijosot falló: HTTP Error 429: Too Many Requests
+12:21:27 [gemini] falló: HTTP Error 429: Too Many Requests
+12:21:33 [deepl] Kenny falló: HTTP Error 429: Too Many Requests
+12:21:33 [deepl] lewevog falló: HTTP Error 429: Too Many Requests
+12:21:34 [deepl] pijosot falló: HTTP Error 429: Too Many Requests
+12:21:34 [gemini] falló: HTTP Error 429: Too Many Requests
+12:21:35 [deepl] Kenny falló: HTTP Error 429: Too Many Requests
+12:21:36 [deepl] lewevog falló: HTTP Error 429: Too Many Requests
+12:21:37 [deepl] pijosot falló: HTTP Error 429: Too Many Requests
+12:21:37 [gemini] falló: HTTP Error 429: Too Many Requests
+12:21:37 [deepl] Kenny falló: HTTP Error 429: Too Many Requests
+12:21:37 [deepl] lewevog falló: HTTP Error 429: Too Many Requests
+12:21:38 [deepl] pijosot falló: HTTP Error 429: Too Many Requests
+12:21:38 [gemini] falló: HTTP Error 429: Too Many Requests
+12:21:44 [deepl] Kenny falló: HTTP Error 429: Too Many Requests
+12:21:44 [deepl] lewevog falló: HTTP Error 429: Too Many Requests
+12:21:45 [deepl] pijosot falló: HTTP Error 429: Too Many Requests
+12:21:45 [gemini] falló: HTTP Error 429: Too Many Requests
+12:21:47 [deepl] Kenny falló: HTTP Error 429: Too Many Requests
+12:21:48 [deepl] lewevog falló: HTTP Error 429: Too Many Requests
+12:21:48 [deepl] pijosot falló: HTTP Error 429: Too Many Requests
+12:21:48 [gemini] falló: HTTP Error 429: Too Many Requests
+12:21:50 [deepl] Kenny falló: HTTP Error 429: Too Many Requests
+12:21:51 [deepl] lewevog falló: HTTP Error 429: Too Many Requests
+12:21:51 [deepl] Kenny falló: HTTP Error 429: Too Many Requests
+12:21:52 [deepl] pijosot falló: HTTP Error 429: Too Many Requests
+12:21:52 [gemini] falló: HTTP Error 429: Too Many Requests
+12:21:52 [deepl] lewevog falló: HTTP Error 429: Too Many Requests
+12:21:52 [deepl] pijosot falló: HTTP Error 429: Too Many Requests
+12:21:53 [gemini] falló: HTTP Error 429: Too Many Requests
+12:23:53 [deepl] Kenny falló: <urlopen error [Errno -3] Temporary failure in name resolution>
+12:24:03 [deepl] lewevog falló: <urlopen error [Errno -3] Temporary failure in name resolution>
