@@ -16,5 +16,11 @@ if [ "$WHISPER_DEVICE" = "cuda" ]; then
   trap 'systemctl --user start voxtype.service 2>/dev/null || true' EXIT
 fi
 brave "file://$PWD/index.html" >/dev/null 2>&1 &
-# Sin 'exec': así el trap de arriba corre al terminar el servidor.
-./venv/bin/python servidor.py
+# Log a archivo: lanzada desde el ícono del escritorio la salida iba a /dev/null y
+# los errores de DeepL/Gemini se perdían. Se recortan las últimas 1000 líneas al abrir.
+LOG=interprete.log
+[ -f "$LOG" ] && tail -n 1000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"
+echo "=== sesión $(date '+%F %T') ===" >> "$LOG"
+# Sin 'exec': así el trap de arriba corre al terminar el servidor. -u: sin buffer,
+# para que el log se escriba al momento aunque vaya por el pipe de tee.
+./venv/bin/python -u servidor.py 2>&1 | tee -a "$LOG"

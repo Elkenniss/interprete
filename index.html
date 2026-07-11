@@ -29,6 +29,9 @@
   @keyframes flash { from { background:#3a3a00; } to { background:transparent; } }
   .chip { display:inline-block; font-size:11px; padding:1px 6px; border-radius:8px; margin:2px 2px 0 0; }
   .numero{background:#553;} .direccion{background:#355;} .nombre{background:#535;} .fecha{background:#544;}
+  .retrad { background:#4a3000; color:#fc6; border:1px solid #a60; border-radius:6px; padding:2px 8px; cursor:pointer; font-size:12px; font-weight:400; }
+  .retrad:hover { background:#5c3c00; }
+  .sintrad { color:#fc6; font-size:12px; font-weight:400; }
   .trad .w { cursor:pointer; border-bottom:1px dotted #777; }
   .trad .w:hover, .trad .w.activo { color:#9cf; }
   .pron { color:#7d7; font-style:normal; font-weight:400; }
@@ -118,12 +121,37 @@ function chips(res){
 function clicable(texto){  // envuelve cada palabra para poder pedir su pronunciación
   return texto.replace(/[A-Za-z][A-Za-z']*/g, w => `<span class="w" onclick="pronunciar(this)">${w}</span>`);
 }
-function rowHTML(iv, bandera){
-  const h = (bandera ? (iv.idioma === "es" ? "🇪🇸 " : "🇺🇸 ") : "") + iv.hora;
+function tradHTML(iv){
   // La interpretación al inglés (cuando el original es español) lleva palabras clicables.
-  const trad = iv.idioma === "es" ? clicable(iv.traduccion) : iv.traduccion;
+  return (iv.idioma === "es" ? clicable(iv.traduccion) : iv.traduccion) + "<br>" + chips(iv.resaltados);
+}
+function rowHTML(iv, bandera, i){
+  const h = (bandera ? (iv.idioma === "es" ? "🇪🇸 " : "🇺🇸 ") : "") + iv.hora;
+  // Sin traducción (fallaron DeepL y el respaldo): en vivo, botón para reintentar;
+  // en el historial (solo lectura, sin índice), solo la marca.
+  const cuerpo = (iv.traduccion || "").trim() ? tradHTML(iv)
+      : i == null ? `<span class="sintrad">⚠ sin traducción</span>`
+      : `<button class="retrad" onclick="reintentar(${i}, this)">⚠ reintentar traducción</button>`;
   return `<div class="row"><div class="orig"><span class="hora">${h}</span><br>${iv.original}</div>`
-       + `<div class="trad">${trad}<br>${chips(iv.resaltados)}</div></div>`;
+       + `<div class="trad"${i == null ? "" : ` id="trad-${i}"`}>${cuerpo}</div></div>`;
+}
+function reintentar(i, btn){
+  if(!ws || ws.readyState !== 1) return;
+  btn.disabled = true;
+  btn.textContent = "⏳ traduciendo…";
+  ws.send(JSON.stringify({ tipo: "retrad", i, original: sesion[i].original, idioma: sesion[i].idioma }));
+}
+function recibirRetrad(m){
+  const iv = sesion[m.i], celda = document.getElementById("trad-" + m.i);
+  if(!iv || !celda) return;
+  if(!(m.traduccion || "").trim()){  // volvió a fallar: dejar reintentar de nuevo
+    const b = celda.querySelector("button.retrad");
+    if(b){ b.disabled = false; b.textContent = "⚠ reintentar traducción"; }
+    return;
+  }
+  iv.traduccion = m.traduccion;
+  iv.resaltados = m.resaltados || [];
+  celda.innerHTML = tradHTML(iv);  // sesion ya quedó al día: el historial la guarda bien
 }
 function mostrarPron(el, pron){
   const tag = document.createElement("i");
@@ -170,7 +198,7 @@ function add(iv){
   limpiarParciales(true);
   sesion.push(iv);
   const feed = iv.idioma === "es" ? feedEs : feedEn;
-  feed.insertAdjacentHTML("beforeend", rowHTML(iv));
+  feed.insertAdjacentHTML("beforeend", rowHTML(iv, false, sesion.length - 1));
   feed.lastElementChild.classList.add("nuevo");
   feed.scrollTop = feed.scrollHeight;
 }
@@ -327,6 +355,7 @@ function connect(){
     if(m.tipo === "uso") verUso(m);
     else if(m.tipo === "pron") recibirPron(m);
     else if(m.tipo === "motor") verMotor(m);
+    else if(m.tipo === "retrad") recibirRetrad(m);
     else if(m.tipo === "parcial") verParcial(m);
     else if(m.tipo === "parcial_fin") limpiarParciales(true);
     else if(m.tipo === "poder") verPoder(m);

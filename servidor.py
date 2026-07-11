@@ -27,6 +27,18 @@ async def broadcast(iv: dict):
         msg = json.dumps(iv, ensure_ascii=False)
         await asyncio.gather(*(c.send(msg) for c in list(CLIENTS)), return_exceptions=True)
 
+async def retraducir(ws, d):
+    # Reintento manual (botón ⚠ de una fila sin traducción). En task aparte: si se
+    # hiciera await en el handler, bloquearía la tijera y el resto de botones.
+    res = await asyncio.get_running_loop().run_in_executor(
+        None, motor.translate, d.get("original", ""),
+        motor.lang_to_direction(d.get("idioma", "en")))
+    try:
+        await ws.send(json.dumps({"tipo": "retrad", "i": d.get("i"), **res},
+                                 ensure_ascii=False))
+    except Exception:
+        pass
+
 async def handler(ws):
     CLIENTS.add(ws)
     try:
@@ -40,6 +52,8 @@ async def handler(ws):
                     await ws.send(json.dumps(
                         {"tipo": "pron", "palabra": palabra, "pron": motor.pronunciacion_es(palabra)},
                         ensure_ascii=False))
+                elif d.get("tipo") == "retrad":
+                    asyncio.create_task(retraducir(ws, d))
                 elif d.get("tipo") == "cortar":
                     CORTAR.set()
                 elif d.get("tipo") == "poder":  # apagar/encender la transcripción
@@ -88,7 +102,7 @@ def parciales(loop):
                     send(loop, {"tipo": "parcial", "idioma": idioma,
                                 "original": texto, "traduccion": res["traduccion"]})
         except Exception as e:
-            print("[parcial] error, sigo:", e, flush=True)
+            motor.log("[parcial] error, sigo:", e)
 
 def pipeline(loop):
     """Hilo bloqueante: captura → whisper → traducción → broadcast.
@@ -116,7 +130,7 @@ def pipeline(loop):
                 if n % 20 == 0:  # refresca el medidor de cuota cada ~20 frases
                     send(loop, {"tipo": "uso", **motor.deepl_usage()})
         except Exception as e:
-            print("[pipeline] error en una frase, sigo:", e, flush=True)
+            motor.log("[pipeline] error en una frase, sigo:", e)
 
 async def main():
     loop = asyncio.get_running_loop()

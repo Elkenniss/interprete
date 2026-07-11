@@ -13,6 +13,16 @@ _MODELS = {}  # tamaño -> WhisperModel; conviven preciso y rápido para cambiar
 
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
+def log(*args):
+    # Con hora: sin ella no se puede cruzar un fallo con la fila que quedó sin traducir.
+    print(time.strftime("%H:%M:%S"), *args, flush=True)
+
+def _deepl_keys() -> list[str]:
+    # Varias cuentas DeepL en cascada (DEEPL_API_KEYS=key1,key2,...): si una falla o
+    # agota cuota, la siguiente responde. DEEPL_API_KEY sola sigue funcionando.
+    raw = os.environ.get("DEEPL_API_KEYS") or os.environ.get("DEEPL_API_KEY", "")
+    return [k.strip() for k in raw.split(",") if k.strip()]
+
 def load_estilo() -> str:
     global _ESTILO
     if _ESTILO is None:
@@ -61,27 +71,30 @@ def gemini_translate(original: str, direction: str) -> dict:
         text = data["candidates"][0]["content"]["parts"][0]["text"]
         return parse_response(text)
     except Exception as e:
-        print("[gemini] falló:", e, flush=True)
+        log("[gemini] falló:", e)
         return {"traduccion": "", "resaltados": []}
 
 def deepl_translate(original: str, direction: str) -> dict:
     # DeepL traduce plano (sin resaltados), pero aguanta el volumen de una llamada
     # real sin el rate limit del free tier de Gemini. formality=prefer_more da "usted".
-    try:
-        if direction == "es2en":
-            data = {"text": original, "target_lang": "EN-US", "source_lang": "ES"}
-        else:
-            data = {"text": original, "target_lang": "ES", "source_lang": "EN",
-                    "formality": "prefer_more"}
-        body = urllib.parse.urlencode(data).encode("utf-8")
-        req = urllib.request.Request("https://api-free.deepl.com/v2/translate", data=body,
-            headers={"Authorization": "DeepL-Auth-Key " + os.environ.get("DEEPL_API_KEY", "")})
-        with urllib.request.urlopen(req, timeout=15) as r:
-            d = json.loads(r.read())
-        return {"traduccion": d["translations"][0]["text"], "resaltados": []}
-    except Exception as e:
-        print("[deepl] falló:", e, flush=True)
-        return {"traduccion": "", "resaltados": []}
+    # timeout corto: lo normal es <1.5s; con varias keys en cascada, esperar 15s por
+    # una key caída trabaría el camino en vivo (lección v30: nada de esperas largas).
+    if direction == "es2en":
+        data = {"text": original, "target_lang": "EN-US", "source_lang": "ES"}
+    else:
+        data = {"text": original, "target_lang": "ES", "source_lang": "EN",
+                "formality": "prefer_more"}
+    body = urllib.parse.urlencode(data).encode("utf-8")
+    for key in _deepl_keys():
+        try:
+            req = urllib.request.Request("https://api-free.deepl.com/v2/translate", data=body,
+                headers={"Authorization": "DeepL-Auth-Key " + key})
+            with urllib.request.urlopen(req, timeout=6) as r:
+                d = json.loads(r.read())
+            return {"traduccion": d["translations"][0]["text"], "resaltados": []}
+        except Exception as e:
+            log(f"[deepl] key {key[:8]}… falló:", e)
+    return {"traduccion": "", "resaltados": []}
 
 # Números/horas/fechas numéricas en el texto: Whisper ya convierte los dígitos
 # dictados a cifras (ej. "uno dos tres" → "123"), así que un patrón de dígitos basta
@@ -150,14 +163,19 @@ def translate(original: str, direction: str) -> dict:
 
 def deepl_usage() -> dict:
     # Caracteres consumidos/límite del mes en DeepL, para saber en vivo si damos abasto.
-    try:
-        req = urllib.request.Request("https://api-free.deepl.com/v2/usage",
-            headers={"Authorization": "DeepL-Auth-Key " + os.environ.get("DEEPL_API_KEY", "")})
-        with urllib.request.urlopen(req, timeout=10) as r:
-            d = json.loads(r.read())
-        return {"count": d.get("character_count", 0), "limit": d.get("character_limit", 0)}
-    except Exception:
-        return {"count": 0, "limit": 0}
+    # Con varias keys se suman: el medidor muestra el total disponible entre todas.
+    count = limit = 0
+    for key in _deepl_keys():
+        try:
+            req = urllib.request.Request("https://api-free.deepl.com/v2/usage",
+                headers={"Authorization": "DeepL-Auth-Key " + key})
+            with urllib.request.urlopen(req, timeout=10) as r:
+                d = json.loads(r.read())
+            count += d.get("character_count", 0)
+            limit += d.get("character_limit", 0)
+        except Exception:
+            pass
+    return {"count": count, "limit": limit}
 
 def lang_to_direction(lang: str) -> str:
     # El LEP habla español; Whisper rara vez confunde el inglés, pero confunde el
