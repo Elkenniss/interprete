@@ -5,3 +5,4 @@ __pycache__/
 *.pyc
 gemini_key.txt
 .pytest_cache/
+modelos/

@@ -59,3 +59,18 @@ WebSocket en ws://localhost:8765 — habla la llamada…
 12:21:53 [gemini] falló: HTTP Error 429: Too Many Requests
 12:23:53 [deepl] Kenny falló: <urlopen error [Errno -3] Temporary failure in name resolution>
 12:24:03 [deepl] lewevog falló: <urlopen error [Errno -3] Temporary failure in name resolution>
+/usr/lib/python3.14/multiprocessing/resource_tracker.py:475: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown: {'/mp-pvlcbgv3'}
+  warnings.warn(
+write() failed: Tubería rota
+=== sesión 2026-07-11 12:29:45 ===
+WebSocket en ws://localhost:8765 — habla la llamada…
+12:33:51 [deepl] Kenny falló: HTTP Error 429: Too Many Requests
+12:33:52 [deepl] Kenny falló: HTTP Error 429: Too Many Requests
+12:33:52 [deepl] lewevog falló: HTTP Error 429: Too Many Requests
+12:33:53 [deepl] pijosot falló: HTTP Error 429: Too Many Requests
+12:33:53 [gemini] falló: HTTP Error 429: Too Many Requests
+12:34:05 [deepl] Kenny falló: HTTP Error 429: Too Many Requests
+12:34:07 [deepl] lewevog falló: HTTP Error 429: Too Many Requests
+12:34:08 [deepl] pijosot falló: HTTP Error 429: Too Many Requests
+12:34:08 [gemini] falló: HTTP Error 429: Too Many Requests
+12:34:09 [gemini] falló: HTTP Error 429: Too Many Requests

@@ -61,9 +61,26 @@ def test_breaker_429_salta_la_key(monkeypatch):
     motor.deepl_translate("hello", "en2es")   # 2ª: la key descansa, NO pide
     assert len(llamadas) == 1
 
+def test_translate_parcial_prefiere_local(monkeypatch):
+    monkeypatch.setattr(motor, "local_translate", lambda o, d: {"traduccion": "¡local!", "resaltados": []})
+    def deepl_prohibido(*a, **k):
+        raise AssertionError("con local disponible, el parcial no debe llamar a DeepL")
+    monkeypatch.setattr(motor, "deepl_translate", deepl_prohibido)
+    assert motor.translate("hello", "en2es", parcial=True)["traduccion"] == "¡local!"
+
+def test_translate_final_cae_a_local_antes_que_gemini(monkeypatch):
+    monkeypatch.setattr(motor, "deepl_translate",
+                        lambda o, d, solo_primera=False: {"traduccion": "", "resaltados": []})
+    monkeypatch.setattr(motor, "local_translate", lambda o, d: {"traduccion": "hola", "resaltados": []})
+    def gemini_prohibido(o, d):
+        raise AssertionError("si el local responde, no debe llegar a Gemini")
+    monkeypatch.setattr(motor, "gemini_translate", gemini_prohibido)
+    assert motor.translate("hello", "en2es")["traduccion"] == "hola"
+
 def test_translate_parcial_no_usa_gemini(monkeypatch):
     monkeypatch.setenv("DEEPL_API_KEYS", "k1,k2")
     monkeypatch.setattr(motor, "_KEY_429", {})
+    monkeypatch.setattr(motor, "local_translate", lambda o, d: {"traduccion": "", "resaltados": []})
     monkeypatch.setattr(motor, "deepl_translate",
                         lambda o, d, solo_primera=False: {"traduccion": "", "resaltados": []})
     def gemini_prohibido(o, d):

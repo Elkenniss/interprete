@@ -166,22 +166,69 @@ def pronunciacion_es(palabra: str) -> str:
             out.append(_CONS_ARPA.get(base, ""))
     return "".join(out)
 
+# Traducción LOCAL (OPUS-MT sobre CTranslate2, en CPU): ilimitada, sin red y sin el
+# throttle por IP de DeepL. Calidad menor que DeepL → se usa para captions provisionales
+# y como red de seguridad de finales. Modelos en ~/interprete/modelos/opus-{en-es,es-en};
+# si no están descargados (o falta sentencepiece), devuelve vacío y no estorba.
+_LOCAL = {}
+LOCAL_DIR = Path(__file__).with_name("modelos")
+
+def _local(direction):
+    if direction not in _LOCAL:
+        try:
+            import ctranslate2
+            import sentencepiece as spm
+            d = LOCAL_DIR / ("opus-en-es" if direction == "en2es" else "opus-es-en")
+            if not (d / "model.bin").exists():
+                raise FileNotFoundError(d)
+            _LOCAL[direction] = (
+                ctranslate2.Translator(str(d), device="cpu", compute_type="int8",
+                                       intra_threads=4),
+                spm.SentencePieceProcessor(str(d / "source.spm")),
+                spm.SentencePieceProcessor(str(d / "target.spm")))
+        except Exception:
+            _LOCAL[direction] = None
+    return _LOCAL[direction]
+
+def local_translate(original: str, direction: str) -> dict:
+    try:
+        eq = _local(direction)
+        if eq is None:
+            return {"traduccion": "", "resaltados": []}
+        translator, sp_in, sp_out = eq
+        # "</s>" al final es obligatorio en OpusMT/CT2: sin él el decoder no ve fin
+        # de frase y degenera en repeticiones infinitas.
+        toks = sp_in.encode(original, out_type=str) + ["</s>"]
+        res = translator.translate_batch([toks], beam_size=1)
+        texto = sp_out.decode(res[0].hypotheses[0])
+        return {"traduccion": texto, "resaltados": resaltados_locales(texto)}
+    except Exception as e:
+        log("[local] falló:", e)
+        return {"traduccion": "", "resaltados": []}
+
 def translate(original: str, direction: str, parcial=False) -> dict:
     # Primario por env (TRADUCTOR), con fallback automático al otro: si el primario
     # falla o agota cuota devuelve traducción vacía, y saltamos al secundario para
     # no quedarnos mudos a mitad de llamada.
     if parcial:
-        # Caption provisional: UN solo intento con la key primaria, sin cascada ni
-        # Gemini. Bajo throttle por IP, la cascada cuadruplicaba las peticiones y
-        # alimentaba el propio 429; un caption sin traducir es barato (la frase
-        # final sí lleva cascada completa) y Gemini (20/día) se reserva para finales.
+        # Caption provisional: SOLO el traductor local — cero peticiones a DeepL, así
+        # los finales nunca compiten con captions por el rate de la IP (el burst limit
+        # de DeepL free es de unas pocas peticiones por ~10s, visto 2026-07-11).
+        # Sin modelo local descargado, cae a UN intento DeepL con la key primaria.
+        res = local_translate(original, direction)
+        if res["traduccion"].strip():
+            return res
         res = deepl_translate(original, direction, solo_primera=True)
         if res["traduccion"].strip() and not res["resaltados"]:
             res["resaltados"] = resaltados_locales(res["traduccion"])
         return res
     funcs = {"deepl": deepl_translate, "gemini": gemini_translate}
     primario = os.environ.get("TRADUCTOR", "deepl")
+    # Finales: primario → local (instantáneo, cubre 429 y hasta caída de internet) →
+    # el otro remoto como último recurso (Gemini free: 20/día, casi nunca disponible).
     orden = [primario] + [t for t in funcs if t != primario]
+    orden.insert(1, "local")
+    funcs["local"] = lambda o, d: local_translate(o, d)
     for t in orden:
         res = funcs[t](original, direction)
         if res["traduccion"].strip():
