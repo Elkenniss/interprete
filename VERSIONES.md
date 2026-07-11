@@ -9,7 +9,7 @@ Rollback: pedirle a Claude "regresame a la vN" (git guarda todas).
 
 | Versión | Commit | Fecha | Qué se hizo | Check | Comentario |
 |---------|---------|-------|-------------|-------|------------|
-| v34 | 5c08bde | 2026-07-11 | Fix: Notas no abrían — un click en la cabecera sin arrastrar guardaba posición vacía y el panel quedaba fuera de pantalla al recargar. Ahora solo guarda con arrastre real y sujeta la posición al viewport (se autocura solo). | ⏳ | Recargar Brave (F5); no hace falta borrar nada. Aplica también a Deletrear. |
+| v34 | 5c08bde | 2026-07-11 | Fix: Notas no abrían — un click en la cabecera sin arrastrar guardaba posición vacía y el panel quedaba fuera de pantalla al recargar. Ahora solo guarda con arrastre real y sujeta la posición al viewport (se autocura solo). | ✅ | Probado por Kenny 2026-07-11: las Notas vuelven a abrir. Aplica también a Deletrear. |
 | v33 | 00c3197 | 2026-07-05 | Deletreo: corrige E (`Ii`→`Íi`) y U (`Iu`→`Yu`); la I mayúscula se veía como l. | ⏳ | Recargar Brave (F5). |
 | v32 | 93656d1 | 2026-07-05 | Panel de deletreo movible (arrastre reutilizable `hacerMovible`, aplicado a Notas y Deletreo). Regla: toda ventana flotante debe ser movible. | ⏳ | Recargar Brave (F5). Se arrastra por la cabecera negra. |
 | v31 | 126590c | 2026-07-05 | Panel 🔤 Deletrear: escribir palabra → filas letra a letra (nombre inglés + OTAN + pronunciación) + botón Ver A-Z. Solo frontend. | ⏳ | Recargar la pestaña de Brave (F5) para verlo. |
