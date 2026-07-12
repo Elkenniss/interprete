@@ -86,7 +86,7 @@
   #tiempo-copy { margin-bottom:6px; font-size:12px; color:#888; }
   #tiempo-copy button { background:#222; color:#ccc; border:1px solid #444; border-radius:6px; padding:2px 8px; cursor:pointer; font-size:12px; margin-right:4px; }
   #tiempo-copy button:hover { background:#333; }
-  #aj-copy { display:block; color:#ccc; font-size:13px; margin-top:4px; cursor:pointer; }
+  #aj-copy, #aj-copy2, #aj-copy3 { display:block; color:#ccc; font-size:13px; margin-top:4px; cursor:pointer; }
   .ttot { background:#111; border:1px solid #333; border-radius:8px; padding:6px 9px; margin-bottom:8px; font-size:13px; }
   .ttot b { color:#9cf; }
   .ttot .tdia { display:flex; justify-content:space-between; color:#999; font-size:12px; padding:1px 0; }
@@ -138,6 +138,8 @@
   <div class="aj-body"><h3>Consumo DeepL por API (mes)</h3><div id="aj-apis"><span class="vacio2">Sin datos aún — llegan al conectar…</span></div>
     <h3>Copiar tiempos (⏱ de Notas)</h3>
     <label id="aj-copy"><input type="checkbox" id="aj-copy-estilo"> Con 📞 en cada llamada (sin marcar: solo los tiempos)</label>
+    <label id="aj-copy2"><input type="checkbox" id="aj-copy-fecha"> Con la fecha de cada llamada (ej: 21:06 y debajo 12/7)</label>
+    <label id="aj-copy3"><input type="checkbox" id="aj-copy-total"> Con el total al final (suma con segundos: horas, min y seg)</label>
   </div>
 </div>
 
@@ -490,10 +492,21 @@ function borrarTiempo(id){
   verTiempos();
 }
 // --- copiar el registro (⧉): rango a elegir; según Ajustes cada llamada va "📞 9:08"
-// o solo "9:08", una por bloque. NUNCA lleva fecha ni hora (Kenny no quiere que se sepan).
+// o solo "9:08", una por bloque, con fecha debajo (opcional) y total al final (opcional).
+// La HORA de la llamada jamás se copia (Kenny no quiere que se sepa a qué hora llamó).
 const copyEstilo = document.getElementById("aj-copy-estilo");
 copyEstilo.checked = localStorage.getItem("interprete_copiar_estilo") !== "sin";
 copyEstilo.onchange = () => localStorage.setItem("interprete_copiar_estilo", copyEstilo.checked ? "con" : "sin");
+const copyFecha = document.getElementById("aj-copy-fecha");
+copyFecha.checked = localStorage.getItem("interprete_copiar_fecha") === "si";
+copyFecha.onchange = () => localStorage.setItem("interprete_copiar_fecha", copyFecha.checked ? "si" : "no");
+const copyTotal = document.getElementById("aj-copy-total");
+copyTotal.checked = localStorage.getItem("interprete_copiar_total") !== "no";
+copyTotal.onchange = () => localStorage.setItem("interprete_copiar_total", copyTotal.checked ? "si" : "no");
+function fmtTotal(min){  // suma exacta con segundos: "1h 5m 30s" / "45m 12s"
+  const s = Math.round(min * 60), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), seg = s % 60;
+  return (h ? `${h}h ` : "") + `${m}m ${seg}s`;
+}
 function toggleCopiar(){
   const r = document.getElementById("copy-rangos");
   r.style.display = r.style.display === "none" ? "inline" : "none";
@@ -504,9 +517,12 @@ function copiarTiempos(rango, btn){
   const mes = new Date(); mes.setDate(1);
   const desde = { hoy, ayer: hoy - DIA, semana: lunes.getTime(), mes: dia0(mes) }[rango];
   const hasta = rango === "ayer" ? hoy : Infinity;
-  const txt = cargarTiempos().filter(t => dia0(t.id) >= desde && dia0(t.id) < hasta)
-    .map(t => copyEstilo.checked ? `📞 ${t.texto}` : t.texto)
+  const sel = cargarTiempos().filter(t => dia0(t.id) >= desde && dia0(t.id) < hasta);
+  let txt = sel.map(t => (copyEstilo.checked ? `📞 ${t.texto}` : t.texto)
+      + (copyFecha.checked ? `\n${new Date(t.id).toLocaleDateString("es", { day: "numeric", month: "numeric" })}` : ""))
     .join("\n\n");
+  if(txt && copyTotal.checked)
+    txt += `\n\nTotal: ${fmtTotal(sel.reduce((s, t) => s + minutosDe(t.texto), 0))}`;
   const antes = btn.textContent;
   btn.textContent = txt ? "✔" : "∅ vacío";
   if(txt) navigator.clipboard.writeText(txt);
