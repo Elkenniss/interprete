@@ -48,6 +48,12 @@ def hilo_decidir(lang, texto):
     HILO.update(lang=lang, texto=texto, t=ahora)
     return texto, contexto, False
 
+def hilo_cerrar():
+    # Mini tijera ✂ de la fila: Kenny cierra la idea a mano. Cubre el hueco de las
+    # frases cortas ambiguas ("Okay", un nombre) que Whisper etiqueta con el idioma
+    # equivocado y por eso no disparan el corte automático por cambio de idioma.
+    HILO.update(lang=None, texto="", t=0.0)
+
 async def enviar_uso(ws):
     # Consumo por API al conectar: sin esto, tras un F5 el panel de Ajustes quedaba
     # "sin datos" hasta el siguiente broadcast (cada 20 frases). En executor: son
@@ -88,6 +94,8 @@ async def handler(ws):
                     asyncio.create_task(retraducir(ws, d))
                 elif d.get("tipo") == "cortar":
                     CORTAR.set()
+                elif d.get("tipo") == "fin_idea":
+                    hilo_cerrar()
                 elif d.get("tipo") == "poder":  # apagar/encender la transcripción
                     (PAUSADO.clear if PAUSADO.is_set() else PAUSADO.set)()
                     await broadcast({"tipo": "poder", "on": not PAUSADO.is_set()})

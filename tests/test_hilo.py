@@ -38,6 +38,13 @@ def test_hilo_largo_corta_con_contexto():
     assert cont is False and t == "sigue la historia"
     assert ctx and len(ctx) <= 300  # fila nueva pero conectada vía context
 
+def test_tijera_manual_cierra_idea():
+    _reset()
+    servidor.hilo_decidir("en", "And the name on the account?")
+    servidor.hilo_cerrar()
+    t, ctx, cont = servidor.hilo_decidir("en", "Can you tell me your date of birth?")
+    assert (t, ctx, cont) == ("Can you tell me your date of birth?", "", False)
+
 def test_deepl_manda_contexto(monkeypatch):
     monkeypatch.setenv("DEEPL_API_KEYS", "k1")
     monkeypatch.setattr(motor, "_KEY_429", {})

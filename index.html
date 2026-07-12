@@ -31,6 +31,8 @@
   .numero{background:#553;} .direccion{background:#355;} .nombre{background:#535;} .fecha{background:#544;}
   .retrad { background:#4a3000; color:#fc6; border:1px solid #a60; border-radius:6px; padding:2px 8px; cursor:pointer; font-size:12px; font-weight:400; }
   .retrad:hover { background:#5c3c00; }
+  .fin { background:none; border:none; color:#555; cursor:pointer; font-size:12px; padding:0 3px; }
+  .fin:hover { color:#9cf; }
   .sintrad { color:#fc6; font-size:12px; font-weight:400; }
   .trad .w { cursor:pointer; border-bottom:1px dotted #777; }
   .trad .w:hover, .trad .w.activo { color:#9cf; }
@@ -174,8 +176,16 @@ function rowHTML(iv, bandera, i){
   const cuerpo = (iv.traduccion || "").trim() ? tradHTML(iv)
       : i == null ? `<span class="sintrad">⚠ sin traducción</span>`
       : `<button class="retrad" onclick="reintentar(${i}, this)">⚠ reintentar traducción</button>`;
-  return `<div class="row"${i == null ? "" : ` id="row-${i}"`}><div class="orig"><span class="hora">${h}</span><br>${iv.original}</div>`
+  // Mini tijera ✂ (solo en vivo): cierra la idea a mano — lo que venga irá en fila
+  // nueva aunque sea el mismo idioma (o Whisper se confunda con un "Okay" suelto).
+  const tij = i == null ? "" : ` <button class="fin" onclick="finIdea(this)" title="Cerrar esta idea: lo siguiente va en fila nueva">✂</button>`;
+  return `<div class="row"${i == null ? "" : ` id="row-${i}"`}><div class="orig"><span class="hora">${h}</span>${tij}<br>${iv.original}</div>`
        + `<div class="trad"${i == null ? "" : ` id="trad-${i}"`}>${cuerpo}</div></div>`;
+}
+function finIdea(btn){
+  if(ws && ws.readyState === 1) ws.send(JSON.stringify({ tipo: "fin_idea" }));
+  btn.textContent = "✔";
+  btn.disabled = true;
 }
 function reintentar(i, btn){
   if(!ws || ws.readyState !== 1) return;
