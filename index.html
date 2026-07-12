@@ -83,6 +83,10 @@
   .ayuda h4 { margin:6px 0 2px; font-size:12px; color:#9cf; text-transform:uppercase; letter-spacing:.5px; }
   .ayuda .drow b { min-width:6.2em; }
   #num-in, #tiempo-in { width:calc(100% - 20px); margin:0 0 6px; padding:6px 8px; background:#111; color:#eee; border:1px solid #444; border-radius:6px; font:14px system-ui,sans-serif; outline:none; box-sizing:border-box; }
+  #tiempo-copy { margin-bottom:6px; font-size:12px; color:#888; }
+  #tiempo-copy button { background:#222; color:#ccc; border:1px solid #444; border-radius:6px; padding:2px 8px; cursor:pointer; font-size:12px; margin-right:4px; }
+  #tiempo-copy button:hover { background:#333; }
+  #aj-copy { display:block; color:#ccc; font-size:13px; margin-top:4px; cursor:pointer; }
   .ttot { background:#111; border:1px solid #333; border-radius:8px; padding:6px 9px; margin-bottom:8px; font-size:13px; }
   .ttot b { color:#9cf; }
   .ttot .tdia { display:flex; justify-content:space-between; color:#999; font-size:12px; padding:1px 0; }
@@ -118,6 +122,7 @@
   <div class="nh"><b>📝 Notas</b><span><button onclick="toggleAyuda('tiempos')" title="Registro de tiempos en llamada">⏱</button> <button onclick="toggleAyuda('dias')" title="Días y meses en inglés, con traducción y pronunciación">📅</button> <button onclick="toggleAyuda('nums')" title="Cómo se dice y pronuncia un número en inglés">🔢</button> <button onclick="borrarNotas()">🗑 Borrar</button> <button onclick="toggleNotas()">✕</button></span></div>
   <div id="ayuda-tiempos" class="ayuda">
     <input id="tiempo-in" placeholder="Ej: 23 min llamada clínica — Enter guarda" autocomplete="off" spellcheck="false">
+    <div id="tiempo-copy"><button onclick="toggleCopiar()" title="Copiar el registro de un rango para pegarlo donde quieras">⧉ Copiar</button><span id="copy-rangos" style="display:none">¿cuál? <button onclick="copiarTiempos('hoy', this)">Hoy</button><button onclick="copiarTiempos('ayer', this)">Ayer</button><button onclick="copiarTiempos('semana', this)">Semana</button><button onclick="copiarTiempos('mes', this)">Mes</button></span></div>
     <div id="tiempo-out"></div>
   </div>
   <div id="ayuda-dias" class="ayuda"></div>
@@ -130,7 +135,10 @@
 
 <div id="ajustes">
   <div class="nh"><b>⚙ Ajustes</b><span><button onclick="toggleAjustes()">✕</button></span></div>
-  <div class="aj-body"><h3>Consumo DeepL por API (mes)</h3><div id="aj-apis"><span class="vacio2">Sin datos aún — llegan al conectar…</span></div></div>
+  <div class="aj-body"><h3>Consumo DeepL por API (mes)</h3><div id="aj-apis"><span class="vacio2">Sin datos aún — llegan al conectar…</span></div>
+    <h3>Copiar tiempos (⏱ de Notas)</h3>
+    <label id="aj-copy"><input type="checkbox" id="aj-copy-estilo"> Con 📞 en cada llamada (sin marcar: solo los tiempos)</label>
+  </div>
 </div>
 
 <div id="deletreo">
@@ -450,8 +458,8 @@ function minutosDe(texto){
   return min;
 }
 function fmtMin(n){ n = Math.round(n); return n >= 60 ? `${Math.floor(n / 60)}h ${n % 60}m` : `${n} min`; }
+function dia0(d){ const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime(); }
 function totalesHTML(ts){
-  const dia0 = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime(); };
   const hoy = dia0(Date.now());
   const lunes = new Date(hoy); lunes.setDate(lunes.getDate() - ((lunes.getDay() + 6) % 7));
   const mes = new Date(); mes.setDate(1); const mes0 = dia0(mes);
@@ -480,6 +488,29 @@ function verTiempos(){
 function borrarTiempo(id){
   localStorage.setItem(TIEMPOS_KEY, JSON.stringify(cargarTiempos().filter(t => t.id !== id)));
   verTiempos();
+}
+// --- copiar el registro (⧉): rango a elegir; según Ajustes cada llamada va "📞 9:08"
+// o solo "9:08", una por bloque. NUNCA lleva fecha ni hora (Kenny no quiere que se sepan).
+const copyEstilo = document.getElementById("aj-copy-estilo");
+copyEstilo.checked = localStorage.getItem("interprete_copiar_estilo") !== "sin";
+copyEstilo.onchange = () => localStorage.setItem("interprete_copiar_estilo", copyEstilo.checked ? "con" : "sin");
+function toggleCopiar(){
+  const r = document.getElementById("copy-rangos");
+  r.style.display = r.style.display === "none" ? "inline" : "none";
+}
+function copiarTiempos(rango, btn){
+  const hoy = dia0(Date.now()), DIA = 86400000;
+  const lunes = new Date(hoy); lunes.setDate(lunes.getDate() - ((lunes.getDay() + 6) % 7));
+  const mes = new Date(); mes.setDate(1);
+  const desde = { hoy, ayer: hoy - DIA, semana: lunes.getTime(), mes: dia0(mes) }[rango];
+  const hasta = rango === "ayer" ? hoy : Infinity;
+  const txt = cargarTiempos().filter(t => dia0(t.id) >= desde && dia0(t.id) < hasta)
+    .map(t => copyEstilo.checked ? `📞 ${t.texto}` : t.texto)
+    .join("\n\n");
+  const antes = btn.textContent;
+  btn.textContent = txt ? "✔" : "∅ vacío";
+  if(txt) navigator.clipboard.writeText(txt);
+  setTimeout(() => { btn.textContent = antes; if(txt) toggleCopiar(); }, 900);
 }
 tiempoIn.addEventListener("keydown", e => {
   if(e.key !== "Enter" || !tiempoIn.value.trim()) return;
