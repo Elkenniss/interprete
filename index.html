@@ -81,6 +81,10 @@
   .ayuda h4 { margin:6px 0 2px; font-size:12px; color:#9cf; text-transform:uppercase; letter-spacing:.5px; }
   .ayuda .drow b { min-width:6.2em; }
   #num-in, #tiempo-in { width:calc(100% - 20px); margin:0 0 6px; padding:6px 8px; background:#111; color:#eee; border:1px solid #444; border-radius:6px; font:14px system-ui,sans-serif; outline:none; box-sizing:border-box; }
+  .ttot { background:#111; border:1px solid #333; border-radius:8px; padding:6px 9px; margin-bottom:8px; font-size:13px; }
+  .ttot b { color:#9cf; }
+  .ttot .tdia { display:flex; justify-content:space-between; color:#999; font-size:12px; padding:1px 0; }
+  .ttot .tdia span:last-child { color:#ccc; }
   .trow { display:flex; justify-content:space-between; align-items:center; gap:6px; padding:4px 2px; border-bottom:1px solid #222; font-size:13px; }
   .trow .tf { color:#888; font-size:11px; white-space:nowrap; }
   .trow button { background:#222; color:#eee; border:1px solid #444; border-radius:6px; padding:1px 6px; cursor:pointer; }
@@ -424,12 +428,44 @@ const tiempoIn = document.getElementById("tiempo-in");
 const tiempoOut = document.getElementById("tiempo-out");
 function cargarTiempos(){ try { return JSON.parse(localStorage.getItem(TIEMPOS_KEY)) || []; } catch { return []; } }
 function esc(s){ return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+// minutos a partir del texto libre: "14:3"→14m3s (min:seg, como los anota Kenny),
+// "2h"→120, "1h 20min"→140, "23 min"→23; un número pelado se toma como minutos.
+function minutosDe(texto){
+  const t = texto.toLowerCase();
+  let m, min = 0;
+  if(m = t.match(/(\d+)\s*:\s*([0-5]?\d)\b/)) return +m[1] + +m[2] / 60;
+  if(m = t.match(/(\d+(?:[.,]\d+)?)\s*h(?:oras?|rs?)?\b/)) min += Math.round(parseFloat(m[1].replace(",", ".")) * 60);
+  if(m = t.match(/(\d+)\s*m(?:in(?:utos?)?)?\b/)) min += +m[1];
+  if(!min && (m = t.match(/\d+/))) min = +m[0];
+  return min;
+}
+function fmtMin(n){ n = Math.round(n); return n >= 60 ? `${Math.floor(n / 60)}h ${n % 60}m` : `${n} min`; }
+function totalesHTML(ts){
+  const dia0 = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime(); };
+  const hoy = dia0(Date.now());
+  const lunes = new Date(hoy); lunes.setDate(lunes.getDate() - ((lunes.getDay() + 6) % 7));
+  const mes = new Date(); mes.setDate(1); const mes0 = dia0(mes);
+  let hoyMin = 0, hoyN = 0, semMin = 0, mesMin = 0;
+  const porDia = new Map();
+  for(const t of ts){
+    const min = minutosDe(t.texto), d = dia0(t.id);
+    if(d === hoy){ hoyMin += min; hoyN++; }
+    if(d >= lunes.getTime()) semMin += min;
+    if(d >= mes0) mesMin += min;
+    const p = porDia.get(d) || { min: 0, n: 0 };
+    p.min += min; p.n++; porDia.set(d, p);
+  }
+  const dias = [...porDia].filter(([d]) => d !== hoy).sort((a, b) => b[0] - a[0]).slice(0, 10)
+    .map(([d, p]) => `<div class="tdia"><span>${new Date(d).toLocaleDateString("es", { weekday: "short", day: "2-digit", month: "2-digit" })} (${p.n})</span><span>${fmtMin(p.min)}</span></div>`).join("");
+  return `<div class="ttot"><b>Hoy: ${fmtMin(hoyMin)}</b> (${hoyN} llamada${hoyN === 1 ? "" : "s"})`
+       + ` · Semana: ${fmtMin(semMin)} · Mes: ${fmtMin(mesMin)}${dias ? "<hr style='border-color:#333;margin:5px 0'>" + dias : ""}</div>`;
+}
 function verTiempos(){
   const ts = cargarTiempos();
-  tiempoOut.innerHTML = ts.length
+  tiempoOut.innerHTML = totalesHTML(ts) + (ts.length
     ? ts.map(t => `<div class="trow"><span>📞 ${esc(t.texto)}</span>`
         + `<span class="tf">${t.fecha}</span><button onclick="borrarTiempo(${t.id})" title="Borrar esta entrada">🗑</button></div>`).join("")
-    : "<span class='vacio2'>Sin tiempos aún — escribe arriba y Enter…</span>";
+    : "<span class='vacio2'>Sin tiempos aún — escribe arriba y Enter…</span>");
 }
 function borrarTiempo(id){
   localStorage.setItem(TIEMPOS_KEY, JSON.stringify(cargarTiempos().filter(t => t.id !== id)));
