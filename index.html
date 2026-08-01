@@ -453,6 +453,8 @@ function esc(s){ return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/
 function minutosDe(texto){
   const t = texto.toLowerCase();
   let m, min = 0;
+  // h:mm:ss va PRIMERO: sin esto "1:01:22" caía en la regla min:seg y se leía como 1 minuto.
+  if(m = t.match(/(\d+)\s*:\s*([0-5]?\d)\s*:\s*([0-5]?\d)\b/)) return +m[1] * 60 + +m[2] + +m[3] / 60;
   if(m = t.match(/(\d+)\s*:\s*([0-5]?\d)\b/)) return +m[1] + +m[2] / 60;
   if(m = t.match(/(\d+(?:[.,]\d+)?)\s*h(?:oras?|rs?)?\b/)) min += Math.round(parseFloat(m[1].replace(",", ".")) * 60);
   if(m = t.match(/(\d+)\s*m(?:in(?:utos?)?)?\b/)) min += +m[1];
