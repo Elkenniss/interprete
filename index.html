@@ -95,6 +95,9 @@
   .trow .tf { color:#888; font-size:11px; white-space:nowrap; }
   .trow button { background:#222; color:#eee; border:1px solid #444; border-radius:6px; padding:1px 6px; cursor:pointer; }
   #notas.grande { height:500px; }
+  #chuleta { display:none; position:fixed; left:16px; top:48px; width:280px; max-height:80vh; background:#1a1a1a; border:1px solid #555; border-radius:10px; flex-direction:column; z-index:9; box-shadow:0 4px 20px rgba(0,0,0,.5); }
+  #chuleta .nh { display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:#000; border-radius:10px 10px 0 0; cursor:move; user-select:none; }
+  #chuleta .nh button { background:#222; color:#eee; border:1px solid #444; border-radius:6px; padding:2px 8px; cursor:pointer; }
 </style>
 </head>
 <body>
@@ -107,6 +110,7 @@
   <button onclick="abrirHist()" title="Ver conversaciones guardadas">🕘 Historial</button>
   <button onclick="toggleNotas()" title="Bloc de notas para apuntar nombres/datos">📝 Notas</button>
   <button onclick="toggleDeletreo()" title="Deletrear una palabra en alfabeto fonético (OTAN) para el representante">🔤 Deletrear</button>
+  <button onclick="toggleChuleta()" title="Chuleta de pronunciación siempre a la vista: decenas, cien/mil, día del mes y días de la semana">🔢 Chuleta</button>
   <button onclick="toggleAjustes()" title="Consumo de cada API de DeepL">⚙ Ajustes</button>
   <span class="sp"></span>
   <span id="alerta-api" onclick="toggleAjustes()" title="Una API llegó a su límite — clic para ver el detalle"></span>
@@ -149,6 +153,10 @@
   <div id="del-out"></div>
 </div>
 
+<div id="chuleta">
+  <div class="nh"><b>🔢 Chuleta</b><span><button onclick="toggleChuleta()">✕</button></span></div>
+  <div id="chu-body"></div>
+</div>
 <div id="modal" class="modal">
   <div class="modal-card">
     <div class="modal-head"><b>🕘 Historial de conversaciones</b><button onclick="cerrarHist()">✕</button></div>
@@ -599,6 +607,36 @@ function verNumero(){
   }
   numOut.innerHTML = out.length ? out.join("") : "<span class='vacio2'>Escribe un número…</span>";
 }
+// --- 🔢 chuleta: panel siempre visible con lo que cuesta decir en vivo (decenas,
+// cien/mil, año, día del mes y días de la semana). Se arma con las tablas de arriba,
+// así que no hay una segunda lista de pronunciaciones que mantener.
+const ORD = { one:["first","férst"], two:["second","SÉ-cond"], three:["third","zérd"],
+  five:["fifth","fifz"], eight:["eighth","éitz"], nine:["ninth","náinz"], twelve:["twelfth","tuélfz"],
+  twenty:["twentieth","TUÉN-ti-ez"], thirty:["thirtieth","ZÉR-ti-ez"] };
+const pron = ws => ws.map(w => PRON_NUM[w] || w);
+const ordinal = w => ORD[w] || [w + "th", (PRON_NUM[w] || w) + "z"];  // el resto es regular: +th ≈ "z" suave
+function diaMes(n){  // 21 → ["twenty-first", "TUÉN-ti-férst"]
+  const ws = enPalabras(n), [w, p] = ordinal(ws.pop());
+  return [ws.concat(w).join("-"), pron(ws).concat(p).join("-")];
+}
+const filaChu = (izq, en, pr) => `<div class="drow"><b>${izq}</b> <span class="do">${en}</span> <span class="dp">(${pr})</span></div>`;
+function verChuleta(){
+  const y = new Date().getFullYear(), anio = comoAnio(y) || enPalabras(y);
+  const fila = n => { const ws = enPalabras(n); return filaChu(n, ws.join(" "), pron(ws).join(" ")); };
+  document.getElementById("chu-body").innerHTML =
+      "<h4>Números</h4>" + [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 1000].map(fila).join("")
+    + "<h4>Año</h4>" + filaChu(y, anio.join(" "), pron(anio).join(" "))
+    + "<h4>Día del mes</h4>" + Array.from({ length: 31 }, (_, i) => filaChu(i + 1, ...diaMes(i + 1))).join("")
+    + "<h4>Días</h4>" + filasDias(DIAS);
+}
+function toggleChuleta(){
+  const c = document.getElementById("chuleta"), abrir = c.style.display !== "flex";
+  c.style.display = abrir ? "flex" : "none";
+  localStorage.setItem("interprete_chuleta", abrir ? "si" : "no");
+}
+hacerMovible(document.getElementById("chuleta"), "interprete_chuleta_pos");
+verChuleta();
+if(localStorage.getItem("interprete_chuleta") !== "no") document.getElementById("chuleta").style.display = "flex";  // abierta por defecto
 // --- deletreo: alfabeto fonético OTAN (letra → nombre inglés → palabra → pronunciación es) ---
 const ALFA = {
   A:["Ei","Alpha","Ál-fa"], B:["Bi","Bravo","Brá-vo"], C:["Si","Charlie","Chár-li"],
