@@ -6,3 +6,6 @@ __pycache__/
 gemini_key.txt
 .pytest_cache/
 modelos/
+# Datos de llamadas reales: nunca versionar transcripciones/notas/los de sesiones
+respaldos/
+interprete.log
